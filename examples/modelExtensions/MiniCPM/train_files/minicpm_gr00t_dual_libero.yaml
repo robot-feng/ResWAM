@@ -53,7 +53,7 @@ datasets:
     include_state: false
     image_size: 224
     obs_image_size: [224, 224]
-    action_type: delta_qpos
+    action_type: delta_ee # xyz + Euler-angle command deltas and gripper
     per_device_batch_size: 1
     num_workers: 4
     video_backend: torchvision_av

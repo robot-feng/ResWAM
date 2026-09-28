@@ -614,7 +614,13 @@ def main():
 
     from starVLA.dataloader.lerobot_datasets import make_LeRobotSingleDataset
 
-    data_cfg = {"lerobot_version": "v2.0", "video_backend": "torchvision_av"}
+    # These raw commands are already per-step EEF deltas. Keep their recorded
+    # values intact; ``action_mode=delta`` would difference adjacent commands.
+    data_cfg = {
+        "lerobot_version": "v2.0",
+        "video_backend": "torchvision_av",
+        "action_mode": "abs",
+    }
     dataset = make_LeRobotSingleDataset(
         args.data_root,
         "libero_goal_no_noops_1.0.0_lerobot",
@@ -745,6 +751,14 @@ def main():
             "vlm": str(base_cfg.framework.qwenvl.base_vlm),
             "action_head": "initialized by framework constructor before pilot updates",
             "saved_checkpoint_scope": "trainable parameters only",
+        },
+        "action_contract": {
+            "type": "delta_ee",
+            "components": ["dx", "dy", "dz", "droll", "dpitch", "dyaw", "gripper"],
+            "dimension": 7,
+            "dataset_action_mode": "abs (preserve the recorded per-step EEF delta command)",
+            "normalization": "min_max for the first six components; gripper remains binary",
+            "execution_gripper": "dataset close=1/open=0 maps to LIBERO -1=close/+1=open",
         },
         "horizons": {
             "action_prediction_H": action_chunk_length,

@@ -53,13 +53,16 @@ source-to-activation schedule for controlled experiments:
 - `fixed_step_delay`: use an explicitly selected control-step delay. The
   schedule models a serialized worker queue when `L >= M`; the evaluator waits
   at a scheduled activation boundary if the real computation is not ready yet.
+  Treat this as a deterministic alignment oracle; its round-trip latency is not
+  evidence for nonblocking fast-loop performance.
 - `trace_replay`: use `source_step` / `activation_step` events captured from an
   earlier run. The pilot trace also contains request, ready, and activation
-  timestamps.
+  timestamps. This mode also waits when an activation scheduled by the trace is
+  not ready, so it checks schedule replay and training alignment.
 - `wall_clock`: use the newest result completed at each action boundary and
   never wait for a refresh after the step-0 bootstrap. Offline training cannot
   infer this schedule, so it requires `--training-alignment-trace` and trains
-  with that trace replayed.
+  with that trace replayed. Use this mode to measure live fast-loop latency.
 
 Examples:
 
@@ -88,6 +91,12 @@ request, ready, and activation step/timestamp fields. `run_provenance.json`,
 checkpoints are saved with each pilot. A wall-clock trace can be passed back
 through `trace_replay` without replacing its variable delays with an assumed
 median.
+
+Only the active semantic hidden state and completed states still awaiting a
+controlled activation are retained. Once a state is activated, its hidden
+tensor is released from the pending-snapshot map; unactivated tensors are
+released when the worker closes. The scalar event log remains available for
+trace analysis.
 
 ## Current limits
 

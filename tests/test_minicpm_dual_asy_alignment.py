@@ -384,6 +384,61 @@ def test_wall_clock_action_uses_old_cache_without_waiting_for_refresh():
     assert policy._stats["last_condition_compute_seconds"] is not None
 
 
+def test_wall_clock_activation_discards_consumed_hidden_snapshots():
+    policy = _stub_async_policy("wall_clock")
+    policy._cached_vlm_hidden = torch.zeros((1, 2, 3))
+    policy._cached_vlm_step = 0
+    policy._completed_snapshots = {
+        source_step: {
+            "generation": 1,
+            "source_step": source_step,
+            "source_timestamp": float(source_step),
+            "instructions": ("task",),
+            "hidden": torch.full((1, 2, 3), float(source_step)),
+            "compute_seconds": 0.1,
+            "request_timestamp": float(source_step),
+            "ready_timestamp": float(source_step) + 0.1,
+            "ready_step": source_step + 1,
+            "error": None,
+        }
+        for source_step in (0, 8)
+    }
+
+    policy._poll_vlm_results(control_step=12)
+
+    assert policy._cached_vlm_step == 8
+    assert torch.all(policy._cached_vlm_hidden == 8.0)
+    assert policy._completed_snapshots == {}
+    assert policy._activation_events[-1]["activation_step"] == 12
+
+
+def test_controlled_activation_prunes_old_but_keeps_future_ready_snapshots():
+    policy = _stub_async_policy("trace_replay")
+    policy._completed_snapshots = {step: {"hidden": torch.zeros(1)} for step in (0, 8, 16)}
+
+    policy._discard_completed_snapshots_through(8)
+
+    assert set(policy._completed_snapshots) == {16}
+
+
+def test_closing_worker_releases_unactivated_hidden_snapshots():
+    policy = _stub_async_policy("wall_clock")
+    policy._completed_snapshots = {8: {"hidden": torch.ones(1)}}
+
+    class StoppedWorker:
+        def join(self, timeout):
+            pass
+
+        def is_alive(self):
+            return False
+
+    policy._worker = StoppedWorker()
+    policy.close_async_worker()
+
+    assert policy._completed_snapshots == {}
+    assert policy._worker is None
+
+
 def test_trace_replay_allows_a_refresh_that_was_never_action_visible():
     policy = _stub_async_policy("trace_replay")
     policy._control_step = 8

@@ -311,6 +311,18 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         event["activation_timestamp"] = float(activation_timestamp)
         self._activation_events.append(dict(event))
 
+    def _discard_completed_snapshots_through(self, source_step):
+        """Drop completed hidden states that can no longer be activated.
+
+        The active representation is held separately in ``_cached_vlm_hidden``.
+        Keeping every completed VLM sequence here would grow GPU memory with
+        episode length. Snapshots newer than ``source_step`` stay queued because
+        a controlled schedule may activate them at a later control boundary.
+        """
+        for completed_step in tuple(self._completed_snapshots):
+            if completed_step <= int(source_step):
+                del self._completed_snapshots[completed_step]
+
     def _poll_vlm_results(self, control_step=None):
         while True:
             try:
@@ -332,6 +344,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                     activation_step=control_step,
                     ready_step=latest.get("ready_step"),
                 )
+                self._discard_completed_snapshots_through(latest_source)
 
     def _accept_vlm_result(self, item, ready_control_step=None):
         generation = item["generation"]
@@ -427,6 +440,8 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         raise RuntimeError("scheduled source is only defined for controlled alignment modes")
 
     def _wait_for_scheduled_source(self, source_step, activation_step, timeout=120.0):
+        if self._cached_vlm_step == int(source_step):
+            return
         deadline = time.monotonic() + timeout
         while source_step not in self._completed_snapshots:
             self._poll_vlm_results(control_step=activation_step)
@@ -449,6 +464,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 activation_step=activation_step,
                 ready_step=self._completed_snapshots[source_step].get("ready_step"),
             )
+            self._discard_completed_snapshots_through(source_step)
 
     def reset_async_cache(self):
         """Start a new episode and invalidate pending outputs from the old one."""
@@ -480,6 +496,10 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             raise TimeoutError("MiniCPM VLM refresh worker did not stop in time")
         with self._runtime_lock:
             self._poll_vlm_results()
+            # Results completed after the final action boundary were never
+            # activated. The event log retains their scalar metadata; release
+            # their hidden-state tensors when the episode worker is closed.
+            self._completed_snapshots.clear()
         self._worker = None
 
     def wait_for_async_refreshes(self, timeout: float = 30.0):

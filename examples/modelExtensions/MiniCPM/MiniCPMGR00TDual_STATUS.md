@@ -41,6 +41,14 @@ complete the task; mean and p95 policy round-trip latencies were `0.873 s` and
 not establish policy quality. The row came from the 2026-09-28 smoke output
 under `playground/Checkpoints/libero_minicpm_pilot/20260928_151100/`.
 
+In that rollout, the action head predicted a chunk of `action_horizon=8`, but
+the evaluator used `chunk[0]` and requested a fresh prediction on the next
+control step: effective execution length was one action (`K=1`). The legacy
+smoke JSON also contains `execution_horizon=8`; that field does not describe
+what the evaluator actually committed and should not be used as the measured
+execution length. This stage has no VLM refresh interval (`M`) because it is
+synchronous.
+
 The current pilot defaults to `MiniCPMGR00TDual` only. It loads and aligns the
 asynchronous config only when `MiniCPMGR00TDualAsy` is explicitly selected.
 The run can use `--skip-simulation` to validate training without launching the

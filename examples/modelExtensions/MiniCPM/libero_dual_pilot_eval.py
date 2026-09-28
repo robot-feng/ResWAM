@@ -24,6 +24,21 @@ from PIL import Image
 PILOT_EXECUTION_HORIZON = 1
 
 
+def _select_executed_action(normalized_actions: np.ndarray) -> np.ndarray:
+    """Select the evaluator's one committed action from a predicted chunk."""
+    chunk = np.asarray(normalized_actions, dtype=np.float32)
+    if chunk.ndim == 1:
+        return chunk
+    if chunk.ndim != 2:
+        raise ValueError(f"expected an action or action chunk; got shape {chunk.shape}")
+    if chunk.shape[0] < PILOT_EXECUTION_HORIZON:
+        raise ValueError(
+            f"policy predicted {chunk.shape[0]} actions, but the evaluator "
+            f"needs {PILOT_EXECUTION_HORIZON} to execute"
+        )
+    return chunk[:PILOT_EXECUTION_HORIZON][0]
+
+
 def _request(sock, payload):
     sock.sendall((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
     chunks = bytearray()
@@ -169,18 +184,7 @@ def main():
             )
             step_latencies.append(time.perf_counter() - started)
             final_server_stats = response.get("async_stats")
-            chunk = np.asarray(response["normalized_actions"], dtype=np.float32)
-            if chunk.ndim == 2:
-                if chunk.shape[0] < PILOT_EXECUTION_HORIZON:
-                    raise ValueError(
-                        f"policy predicted {chunk.shape[0]} actions, but the evaluator "
-                        f"needs {PILOT_EXECUTION_HORIZON} to execute"
-                    )
-                action_norm = chunk[:PILOT_EXECUTION_HORIZON][0]
-            elif chunk.ndim == 1:
-                action_norm = chunk
-            else:
-                raise ValueError(f"unexpected action output shape {chunk.shape}")
+            action_norm = _select_executed_action(response["normalized_actions"])
             action = _unnormalize_action(action_norm, action_stats)
             obs, _, done, _ = env.step(action.tolist())
             control_steps += 1

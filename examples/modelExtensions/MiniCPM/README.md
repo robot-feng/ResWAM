@@ -81,16 +81,21 @@ Keep these horizons separate:
 - In the current DualAsy pilot, `action_horizon=8`, the evaluator consumes one action per control step (`execution_horizon=1` by policy), and `vlm_refresh_interval=8`. Thus the observed 8:1 cadence is the VLM refresh interval relative to low-level control; it does not equate predicted chunk length with executed chunk length. Other evaluators may commit a whole chunk and therefore choose `execution_horizon=action_horizon`.
 - Stage-1 ResWAM uses an explicitly annotated successful terminal frame as its residual target. That is a goal target, not a fixed numeric prediction horizon.
 
-The stage-1 example config is `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml`; stage 2 uses `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_asy_libero.yaml`. The asynchronous config has an action chunk length and an independent VLM refresh interval. A quick same-trajectory pipeline comparison is:
+Stage 1 uses `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml` and runs independently by default:
 
 ```bash
 conda activate ResWAM
 python examples/modelExtensions/MiniCPM/libero_dual_pilot.py \
+  --models MiniCPMGR00TDual \
   --train-steps 4 \
   --max-control-steps 56
 ```
 
-The pilot reads only episode 0 of `libero_goal_no_noops_1.0.0_lerobot` ("put the bowl on the plate"), freezes MiniCPM-V and DINO, trains each action policy for four updates, then runs one matching LIBERO task in the separate `libero` environment. It writes train losses, rollout results, per-step latency, async refresh counts, and rollout videos under `playground/Checkpoints/libero_minicpm_pilot/`. This is an end-to-end smoke comparison, not a statistically meaningful success-rate benchmark.
+The stage-1 pilot reads only episode 0 of `libero_goal_no_noops_1.0.0_lerobot` ("put the bowl on the plate"), freezes MiniCPM-V and DINO, trains the dual action policy for four updates, then runs one matching LIBERO task in the separate `libero` environment. It writes train losses, rollout results, policy latency, and a rollout video under `playground/Checkpoints/libero_minicpm_pilot/`. This is an end-to-end smoke check, not a statistically meaningful success-rate benchmark. It does not load the async config or residual model.
+
+`tests/test_minicpm_gr00t_dual.py` verifies framework registration stays separate, the VLM and projected DINO tokens reach the action head in the expected order, gradients flow to the VLM and DINO projection, and non-default action horizon/dimension values control both training labels and inference shape. It also checks that a stage-1 pilot does not load the asynchronous config. These use mocked backbones; a real MiniCPM/DINO training step and LIBERO rollout still require the GPU/model/simulator smoke run.
+
+The stage-1 smoke result and remaining validation are summarized in [`MiniCPMGR00TDual_STATUS.md`](MiniCPMGR00TDual_STATUS.md).
 
 The first labeled LIBERO residual ablation and its caveats are documented in [`MiniCPMGR00TRes_ABLATION.md`](MiniCPMGR00TRes_ABLATION.md); it is a five-episode evaluation pilot whose results informed continued training, not an untouched test or evidence of general representation/control gains. Current engineering status and outstanding validation are in [`MiniCPMGR00TRes_STATUS.md`](MiniCPMGR00TRes_STATUS.md).
 

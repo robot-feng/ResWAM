@@ -1,10 +1,11 @@
-"""Tiny same-trajectory training + one-task LIBERO pipeline comparison.
+"""Small same-trajectory LIBERO smoke pipeline, stage 1 by default.
 
-Compares frozen-VLM ``MiniCPMGR00T``, ``MiniCPMGR00TDual`` and
-``MiniCPMGR00TDualAsy``. It uses only episode 0 from ``libero_goal`` for four
-optimizer steps, then evaluates one 56-control-step rollout on the matching
-LIBERO task. The VLM and DINO encoder are frozen; the action head and, for the
-dual models, the DINO projection are trained.
+The default run trains and evaluates only ``MiniCPMGR00TDual``. Later
+baselines can be included explicitly with ``--models``; the dual-asynchronous
+config and anchor-frame alignment are loaded only when that model is selected.
+The smoke uses episode 0 from ``libero_goal`` for a few optimizer steps and can
+evaluate one matching LIBERO task. The VLM and DINO encoder are frozen; the
+action head and DINO projection are trained.
 
 The LIBERO simulator runs in the separate Python 3.12 ``libero`` environment.
 The script serves each live policy over localhost TCP, so no checkpoint copy or
@@ -41,6 +42,26 @@ LIBERO_ROOT = pathlib.Path("/home/taizun/lcy/FastWAM/third_party/LIBERO-plus")
 LIBERO_PYTHON = pathlib.Path("/data/miniconda3/envs/libero/bin/python")
 MODEL_IDS = ("MiniCPMGR00T", "MiniCPMGR00TDual", "MiniCPMGR00TDualAsy")
 TRAIN_FRAME_IDS = (1, 2, 9, 10)
+
+
+def _resolve_async_refresh_interval(models, requested_interval, async_config_path):
+    """Load async-only settings only when the stage-2 model is selected."""
+    run_async = "MiniCPMGR00TDualAsy" in models
+    if requested_interval is not None and not run_async:
+        raise ValueError("--vlm-refresh-interval is only valid when MiniCPMGR00TDualAsy is selected")
+    if not run_async:
+        return None
+
+    async_cfg = OmegaConf.load(async_config_path)
+    interval = requested_interval
+    if interval is None:
+        interval = async_cfg.framework.get("vlm_refresh_interval")
+    if interval is None:
+        interval = 8
+    interval = int(interval)
+    if interval < 1:
+        raise ValueError("framework.vlm_refresh_interval must be >= 1")
+    return interval
 
 
 def _json_send(handler, payload):
@@ -267,8 +288,8 @@ def main():
         "--models",
         nargs="+",
         choices=MODEL_IDS,
-        default=MODEL_IDS,
-        help="model variants to run (defaults to the three-way comparison)",
+        default=("MiniCPMGR00TDual",),
+        help="model variants to run (defaults to the stage-1 dual baseline)",
     )
     parser.add_argument(
         "--vlm-refresh-interval",
@@ -281,10 +302,11 @@ def main():
     parser.add_argument("--skip-simulation", action="store_true")
     args = parser.parse_args()
 
-    if not LIBERO_PYTHON.is_file():
-        raise FileNotFoundError(f"LIBERO_PYTHON not found: {LIBERO_PYTHON}")
-    if not LIBERO_ROOT.is_dir():
-        raise FileNotFoundError(f"LIBERO root not found: {LIBERO_ROOT}")
+    if not args.skip_simulation:
+        if not LIBERO_PYTHON.is_file():
+            raise FileNotFoundError(f"LIBERO_PYTHON not found: {LIBERO_PYTHON}")
+        if not LIBERO_ROOT.is_dir():
+            raise FileNotFoundError(f"LIBERO root not found: {LIBERO_ROOT}")
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_dir = args.output_dir or ROOT / "playground/Checkpoints/libero_minicpm_pilot" / timestamp
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -294,18 +316,12 @@ def main():
         base_cfg.framework.action_model.get("action_horizon", 8)
     )
     action_chunk_length = int(base_cfg.framework.action_model.action_horizon)
-    async_cfg = OmegaConf.load(args.async_config)
-    configured_refresh_interval = async_cfg.framework.get("vlm_refresh_interval")
-    vlm_refresh_interval = args.vlm_refresh_interval
-    if vlm_refresh_interval is None:
-        vlm_refresh_interval = configured_refresh_interval
-    if vlm_refresh_interval is None:
-        vlm_refresh_interval = 8
-    vlm_refresh_interval = int(vlm_refresh_interval)
+    run_async = "MiniCPMGR00TDualAsy" in args.models
+    vlm_refresh_interval = _resolve_async_refresh_interval(
+        args.models, args.vlm_refresh_interval, args.async_config
+    )
     if action_chunk_length < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
-    if vlm_refresh_interval < 1:
-        raise ValueError("framework.vlm_refresh_interval must be >= 1")
 
     from starVLA.dataloader.lerobot_datasets import make_LeRobotSingleDataset
 
@@ -329,37 +345,42 @@ def main():
     # Materialize only the selected single-trajectory samples and their anchor
     # frames. No mixture sampling or other episode is used in this pilot.
     raw_examples = {frame: dataset[frame] for frame in set(selected + [16, 23]) if frame < max_frame}
-    asy_examples = []
-    for frame in selected:
-        example = copy.deepcopy(raw_examples[frame])
-        anchor = frame - frame % vlm_refresh_interval
-        if anchor not in raw_examples:
-            raw_examples[anchor] = dataset[anchor]
-        example["vlm_image"] = copy.deepcopy(raw_examples[anchor]["image"])
-        example["vlm_anchor_frame"] = anchor
-        asy_examples.append(example)
     heldout_frame = min(23, max_frame - 1)
     heldout = copy.deepcopy(raw_examples.get(heldout_frame) or dataset[heldout_frame])
-    heldout["vlm_image"] = copy.deepcopy(
-        dataset[heldout_frame - heldout_frame % vlm_refresh_interval]["image"]
-    )
+    asy_examples = []
+    if run_async:
+        for frame in selected:
+            example = copy.deepcopy(raw_examples[frame])
+            anchor = frame - frame % vlm_refresh_interval
+            if anchor not in raw_examples:
+                raw_examples[anchor] = dataset[anchor]
+            example["vlm_image"] = copy.deepcopy(raw_examples[anchor]["image"])
+            example["vlm_anchor_frame"] = anchor
+            asy_examples.append(example)
+        heldout["vlm_image"] = copy.deepcopy(
+            dataset[heldout_frame - heldout_frame % vlm_refresh_interval]["image"]
+        )
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"
     base_cfg.framework.qwenvl.attn_implementation = "sdpa"
     base_cfg.framework.action_model.repeated_diffusion_steps = 1
-    # Keep this explicitly independent from action_horizon. The synchronous
-    # baselines ignore it; the async model uses it for upper VLM refreshes.
-    base_cfg.framework.vlm_refresh_interval = vlm_refresh_interval
+    # This setting belongs only to the selected stage-2 async model. Stage 1
+    # receives no refresh-cadence config and remains a synchronous baseline.
+    if run_async:
+        base_cfg.framework.vlm_refresh_interval = vlm_refresh_interval
     base_cfg.datasets.vla_data.obs_image_size = [224, 224]
     base_cfg.trainer.freeze_modules = "qwen_vl_interface,dino_encoder"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"[pilot] dataset episode=0 task='put the bowl on the plate' frames={frame_count}")
+    cadence_note = (
+        f" vlm_refresh_interval={vlm_refresh_interval}"
+        if run_async
+        else " stage=1_synchronous"
+    )
     print(
-        f"[pilot] train_frames={selected} action_chunk_length={action_chunk_length} "
-        f"vlm_refresh_interval={vlm_refresh_interval} "
-        f"VLM_refresh=every_{vlm_refresh_interval}_control_steps "
-        f"device={device}"
+        f"[pilot] train_frames={selected} action_chunk_length={action_chunk_length}"
+        f"{cadence_note} device={device}"
     )
     print(f"[pilot] results={output_dir}")
 

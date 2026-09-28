@@ -276,6 +276,35 @@ def test_reset_invalidates_cached_and_inflight_generation_results():
     assert policy._async_generation == old_generation + 1
 
 
+def test_vlm_worker_does_not_wait_on_control_lock(monkeypatch):
+    policy = _stub_async_policy("fixed_step_delay")
+    policy._worker_stream = None
+    policy._async_generation = 1
+    policy._stats["vlm_dropped_stale"] = 0
+    policy._encode_vlm = lambda images, instructions: torch.ones((1, 2, 3))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    worker = threading.Thread(target=policy._vlm_worker_loop, daemon=True)
+    result = None
+    policy._runtime_lock.acquire()
+    try:
+        worker.start()
+        policy._request_queue.put((1, 0, [], ("task",), 1.0, 1.0))
+        try:
+            result = policy._result_queue.get(timeout=1.0)
+        except queue.Empty:
+            pass
+    finally:
+        policy._runtime_lock.release()
+        policy._request_queue.put(None)
+        worker.join(timeout=2.0)
+
+    assert not worker.is_alive()
+    assert result is not None
+    assert result["source_step"] == 0
+    assert result["error"] is None
+
+
 def test_control_step_origin_resets_with_instruction_epoch():
     policy = _stub_async_policy("wall_clock")
     assert policy._resolve_control_step(20) == 0

@@ -224,11 +224,27 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                     source_timestamp,
                     request_timestamp,
                 ) = request
-                with self._runtime_lock:
-                    request_is_stale = generation != self._async_generation
-                    if request_is_stale:
-                        self._stats["vlm_dropped_stale"] += 1
+                # predict_action holds _runtime_lock while waiting for this
+                # result (notably during the first/bootstrap refresh). Do not
+                # acquire that lock here: doing so deadlocks the control thread
+                # against the worker. The generation is an integer, so reading
+                # its current value is atomic under CPython; any reset racing
+                # after this check is handled when the result is accepted.
+                request_is_stale = generation != self._async_generation
                 if request_is_stale:
+                    self._result_queue.put(
+                        {
+                            "generation": generation,
+                            "source_step": control_step,
+                            "source_timestamp": source_timestamp,
+                            "instructions": instructions,
+                            "hidden": None,
+                            "compute_seconds": 0.0,
+                            "request_timestamp": request_timestamp,
+                            "ready_timestamp": time.perf_counter(),
+                            "error": None,
+                        }
+                    )
                     continue
                 started = time.perf_counter()
                 with torch.inference_mode():

@@ -18,6 +18,7 @@ from examples.modelExtensions.MiniCPM.libero_dual_pilot import (
     _latest_completed_vlm_anchor_step,
     _resolve_async_alignment,
     _resolve_async_refresh_interval,
+    _select_training_frames,
     _save_trainable_checkpoint,
 )
 
@@ -150,6 +151,42 @@ def test_async_training_anchor_tracks_latest_completed_refresh():
     ]
     with pytest.raises(ValueError, match="explicit alignment_mode"):
         _build_examples(dataset, [9], 8, True)
+
+
+@pytest.mark.parametrize(
+    ("latency", "expected_anchors"),
+    [
+        (0, [8, 8, 8, 8, 8]),
+        (1, [0, 8, 8, 8, 8]),
+        (2, [0, 0, 8, 8, 8]),
+        (4, [0, 0, 0, 0, 8]),
+    ],
+)
+def test_boundary_window_training_anchors_follow_controlled_latency(
+    latency, expected_anchors
+):
+    dataset = [{"image": [step], "action": step} for step in range(24)]
+    examples = _build_examples(
+        dataset,
+        [8, 9, 10, 11, 12],
+        8,
+        True,
+        alignment_mode="fixed_step_delay",
+        fixed_latency_steps=latency,
+    )
+    assert [example["vlm_anchor_frame"] for example in examples] == expected_anchors
+
+
+def test_pilot_accepts_explicit_boundary_frames_for_alignment_ablation():
+    boundary_window = [8, 9, 10, 11, 12]
+    assert _select_training_frames(boundary_window, 5, max_frame=47) == boundary_window
+    assert _select_training_frames(boundary_window, 3, max_frame=47) == [8, 9, 10]
+    with pytest.raises(ValueError, match="must be in"):
+        _select_training_frames([8, 47], 2, max_frame=47)
+    with pytest.raises(ValueError, match="unique"):
+        _select_training_frames([8, 8], 2, max_frame=47)
+    with pytest.raises(ValueError, match="for 5 updates"):
+        _select_training_frames([8, 9], 5, max_frame=47)
 
 
 def test_synchronous_training_alignment_uses_current_periodic_refresh():

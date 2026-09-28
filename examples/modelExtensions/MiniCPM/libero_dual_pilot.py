@@ -401,6 +401,27 @@ def _build_examples(
     return examples
 
 
+def _select_training_frames(frame_ids, train_steps, max_frame):
+    """Validate and select a deterministic set of episode-local train frames."""
+    train_steps = int(train_steps)
+    max_frame = int(max_frame)
+    frame_ids = tuple(int(frame_id) for frame_id in frame_ids)
+    if train_steps < 1:
+        raise ValueError("--train-steps must be >= 1")
+    if len(set(frame_ids)) != len(frame_ids):
+        raise ValueError("training frame IDs must be unique")
+    invalid = [frame_id for frame_id in frame_ids if frame_id < 0 or frame_id >= max_frame]
+    if invalid:
+        raise ValueError(
+            f"training frame IDs must be in [0, {max_frame}); invalid: {invalid}"
+        )
+    if len(frame_ids) < train_steps:
+        raise ValueError(
+            f"received {len(frame_ids)} training frame IDs for {train_steps} updates"
+        )
+    return list(frame_ids[:train_steps])
+
+
 def _freeze_backbones(model, include_dino):
     for parameter in model.qwen_vl_interface.parameters():
         parameter.requires_grad_(False)
@@ -550,6 +571,13 @@ def main():
     parser.add_argument("--async-config", type=pathlib.Path, default=DEFAULT_ASY_CONFIG)
     parser.add_argument("--output-dir", type=pathlib.Path, default=None)
     parser.add_argument("--train-steps", type=int, default=4)
+    parser.add_argument(
+        "--train-frame-ids",
+        nargs="+",
+        type=int,
+        default=None,
+        help="explicit episode-0 frame IDs used in update order (defaults to the pilot window)",
+    )
     parser.add_argument("--max-control-steps", type=int, default=56)
     parser.add_argument(
         "--models",
@@ -632,10 +660,12 @@ def main():
         raise RuntimeError(f"could not identify the expected episode 0 window: {episode0_steps[:10]}")
     frame_count = len(episode0_steps)
     max_frame = min(frame_count - action_chunk_length, 47)
-    selected = [int(x) for x in TRAIN_FRAME_IDS if x < max_frame]
-    if len(selected) < args.train_steps:
-        raise ValueError(f"episode 0 has too few valid frames for {args.train_steps} updates")
-    selected = selected[: args.train_steps]
+    requested_train_frames = (
+        args.train_frame_ids if args.train_frame_ids is not None else TRAIN_FRAME_IDS
+    )
+    selected = _select_training_frames(
+        requested_train_frames, args.train_steps, max_frame
+    )
 
     # Materialize only the selected single-trajectory samples. No mixture
     # sampling or other episode is used in this pilot.

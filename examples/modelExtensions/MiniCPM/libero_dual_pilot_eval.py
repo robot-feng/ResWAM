@@ -194,6 +194,9 @@ def main():
                         "vlm_submitted": final_server_stats.get("vlm_submitted"),
                         "vlm_completed": final_server_stats.get("vlm_completed"),
                         "queued_refreshes": final_server_stats.get("queued_refreshes"),
+                        "latest_vlm_activation_event": final_server_stats.get(
+                            "latest_vlm_activation_event"
+                        ),
                         "policy_roundtrip_seconds": step_latencies[-1],
                     }
                 )
@@ -217,6 +220,11 @@ def main():
         "execution_horizon": PILOT_EXECUTION_HORIZON,
         "execution_policy": "apply the first predicted action, then request a new chunk next control step",
         "async_step_trace": async_step_trace,
+        "activation_events": (
+            final_server_stats.get("vlm_activation_events", [])
+            if final_server_stats is not None
+            else []
+        ),
         "mean_policy_roundtrip_seconds": float(np.mean(step_latencies)) if step_latencies else 0.0,
         "p95_policy_roundtrip_seconds": float(np.percentile(step_latencies, 95)) if step_latencies else 0.0,
         "async_stats": final_server_stats,

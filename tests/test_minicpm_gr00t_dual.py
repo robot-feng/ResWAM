@@ -16,8 +16,8 @@ from starVLA.model.tools import FRAMEWORK_REGISTRY
 from examples.modelExtensions.MiniCPM.libero_dual_pilot import (
     _build_examples,
     _latest_completed_vlm_anchor_step,
+    _resolve_async_alignment,
     _resolve_async_refresh_interval,
-    _resolve_async_training_latency_steps,
 )
 
 
@@ -49,19 +49,16 @@ def test_stage1_pilot_does_not_load_async_config(tmp_path):
         _resolve_async_refresh_interval(
             ["MiniCPMGR00TDual"], 8, missing_async_config
         )
-    assert _resolve_async_training_latency_steps(
-        ["MiniCPMGR00TDual"], None, missing_async_config
-    ) is None
     with pytest.raises(ValueError, match="only valid when MiniCPMGR00TDualAsy is selected"):
-        _resolve_async_training_latency_steps(
-            ["MiniCPMGR00TDual"], 3, missing_async_config
+        _resolve_async_alignment(
+            ["MiniCPMGR00TDual"], "synchronous", None, None, None, missing_async_config
         )
 
 
 def test_async_pilot_refresh_setting_is_explicit_and_validated(tmp_path):
     async_config = tmp_path / "async.yaml"
     async_config.write_text(
-        "framework:\n  vlm_refresh_interval: 6\n  training_vlm_latency_steps: 3\n",
+        "framework:\n  vlm_refresh_interval: 6\n  alignment_mode: fixed_step_delay\n  fixed_latency_steps: 3\n",
         encoding="utf-8",
     )
     models = ["MiniCPMGR00TDual", "MiniCPMGR00TDualAsy"]
@@ -69,10 +66,43 @@ def test_async_pilot_refresh_setting_is_explicit_and_validated(tmp_path):
     assert _resolve_async_refresh_interval(models, 3, async_config) == 3
     with pytest.raises(ValueError, match="must be >= 1"):
         _resolve_async_refresh_interval(models, 0, async_config)
-    assert _resolve_async_training_latency_steps(models, None, async_config) == 3
-    assert _resolve_async_training_latency_steps(models, 2, async_config) == 2
-    with pytest.raises(ValueError, match="training_vlm_latency_steps must be >= 0"):
-        _resolve_async_training_latency_steps(models, -1, async_config)
+    resolved = _resolve_async_alignment(models, None, None, None, None, async_config)
+    assert resolved["runtime_mode"] == "fixed_step_delay"
+    assert resolved["training_mode"] == "fixed_step_delay"
+    assert resolved["fixed_latency_steps"] == 3
+    overridden = _resolve_async_alignment(models, "fixed_step_delay", 2, None, None, async_config)
+    assert overridden["fixed_latency_steps"] == 2
+    no_mode_config = tmp_path / "no_mode.yaml"
+    no_mode_config.write_text("framework:\n  vlm_refresh_interval: 8\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="requires --fixed-latency-steps"):
+        _resolve_async_alignment(models, "fixed_step_delay", None, None, None,
+                                 no_mode_config)
+    with pytest.raises(ValueError, match="no default VLM latency"):
+        _resolve_async_alignment(models, None, None, None, None,
+                                 no_mode_config)
+    with pytest.raises(ValueError, match="only valid with fixed_step_delay"):
+        _resolve_async_alignment(models, "wall_clock", 3, None, None,
+                                 no_mode_config)
+
+
+def test_wall_clock_training_alignment_requires_and_replays_an_observed_trace(tmp_path):
+    async_config = tmp_path / "async.yaml"
+    async_config.write_text("framework:\n  vlm_refresh_interval: 8\n", encoding="utf-8")
+    trace = tmp_path / "trace.json"
+    trace.write_text(
+        '{"activation_events": [{"source_step": 0, "activation_step": 0}, '
+        '{"source_step": 8, "activation_step": 11}]}',
+        encoding="utf-8",
+    )
+    models = ["MiniCPMGR00TDualAsy"]
+    with pytest.raises(ValueError, match="prior activation trace"):
+        _resolve_async_alignment(models, "wall_clock", None, None, None, async_config)
+    resolved = _resolve_async_alignment(
+        models, "wall_clock", None, None, trace, async_config
+    )
+    assert resolved["runtime_mode"] == "wall_clock"
+    assert resolved["training_mode"] == "trace_replay"
+    assert resolved["trace_activation_steps"] == {0: 0, 8: 11}
 
 
 def test_async_training_anchor_tracks_latest_completed_refresh():
@@ -86,7 +116,14 @@ def test_async_training_anchor_tracks_latest_completed_refresh():
     ]
 
     dataset = [{"image": [step], "action": step} for step in range(24)]
-    examples = _build_examples(dataset, [1, 2, 9, 10, 11, 19], 8, True, 3)
+    examples = _build_examples(
+        dataset,
+        [1, 2, 9, 10, 11, 19],
+        8,
+        True,
+        alignment_mode="fixed_step_delay",
+        fixed_latency_steps=3,
+    )
     assert [example["vlm_anchor_frame"] for example in examples] == [0, 0, 0, 0, 8, 16]
     assert [example["vlm_image"] for example in examples] == [
         dataset[anchor]["image"] for anchor in (0, 0, 0, 0, 8, 16)

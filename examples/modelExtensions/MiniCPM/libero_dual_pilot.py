@@ -34,6 +34,12 @@ import torch
 from omegaconf import OmegaConf
 from PIL import Image
 
+from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
+    ALIGNMENT_MODES,
+    load_trace_activation_steps,
+    source_step_at,
+)
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_DATA_ROOT = pathlib.Path("/data/tzq/datasets/starVLA/Datasets/libero_10hz")
 DEFAULT_CONFIG = ROOT / "examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml"
@@ -64,58 +70,119 @@ def _resolve_async_refresh_interval(models, requested_interval, async_config_pat
     return interval
 
 
-def _resolve_async_training_latency_steps(models, requested_steps, async_config_path):
-    """Resolve the training-side delay before a VLM refresh becomes active."""
+def _latest_completed_vlm_anchor_step(control_step, refresh_interval, latency_steps):
+    """Backward-compatible helper for the fixed-step-delay study mode."""
+    return source_step_at(
+        control_step,
+        mode="fixed_step_delay",
+        refresh_interval=refresh_interval,
+        fixed_latency_steps=latency_steps,
+    )
+
+
+def _resolve_async_alignment(
+    models,
+    requested_mode,
+    requested_latency_steps,
+    requested_trace,
+    requested_training_trace,
+    async_config_path,
+):
+    """Resolve distinct runtime and offline-training alignment policies.
+
+    A wall-clock runtime cannot be reconstructed from a scalar offline delay.
+    It trains against an explicitly recorded activation trace instead.
+    """
     run_async = "MiniCPMGR00TDualAsy" in models
-    if requested_steps is not None and not run_async:
-        raise ValueError(
-            "--training-vlm-latency-steps is only valid when "
-            "MiniCPMGR00TDualAsy is selected"
-        )
+    options = (
+        requested_mode,
+        requested_latency_steps,
+        requested_trace,
+        requested_training_trace,
+    )
     if not run_async:
+        if any(value is not None for value in options):
+            raise ValueError(
+                "alignment options are only valid when MiniCPMGR00TDualAsy is selected"
+            )
         return None
 
     async_cfg = OmegaConf.load(async_config_path)
     framework_cfg = async_cfg.get("framework") or {}
-    steps = requested_steps
-    if steps is None:
-        steps = framework_cfg.get("training_vlm_latency_steps", 0)
-    steps = int(steps)
-    if steps < 0:
-        raise ValueError("framework.training_vlm_latency_steps must be >= 0")
-    return steps
+    configured_alignment = framework_cfg.get("async_alignment") or {}
+    mode = (
+        requested_mode
+        or configured_alignment.get("mode")
+        or framework_cfg.get("alignment_mode")
+    )
+    if mode is None:
+        raise ValueError(
+            "select --alignment-mode explicitly for MiniCPMGR00TDualAsy; "
+            "there is no default VLM latency"
+        )
+    if mode not in ALIGNMENT_MODES:
+        raise ValueError(f"--alignment-mode must be one of {ALIGNMENT_MODES}")
 
+    fixed_latency = requested_latency_steps
+    if fixed_latency is None:
+        fixed_latency = configured_alignment.get("fixed_latency_steps")
+    if fixed_latency is None:
+        fixed_latency = framework_cfg.get("fixed_latency_steps")
+    if mode == "fixed_step_delay":
+        if fixed_latency is None or int(fixed_latency) < 0:
+            raise ValueError(
+                "fixed_step_delay requires --fixed-latency-steps >= 0"
+            )
+        fixed_latency = int(fixed_latency)
+    elif fixed_latency is not None:
+        raise ValueError(
+            "--fixed-latency-steps is only valid with fixed_step_delay; "
+            "wall_clock delivery delay is measured at runtime"
+        )
 
-def _latest_completed_vlm_anchor_step(control_step, refresh_interval, latency_steps):
-    """Estimate the newest periodic VLM refresh available at a control step.
+    runtime_mode = mode
+    trace_path = (
+        requested_trace
+        or configured_alignment.get("trace_path")
+        or framework_cfg.get("trace_path")
+    )
+    training_trace = requested_training_trace or trace_path
+    if mode == "wall_clock":
+        if not training_trace:
+            raise ValueError(
+                "wall_clock training alignment requires a prior activation trace; "
+                "pass --training-alignment-trace"
+            )
+        training_mode = "trace_replay"
+        trace_path = training_trace
+    elif mode == "trace_replay":
+        if not trace_path:
+            raise ValueError("trace_replay requires --alignment-trace")
+        training_mode = "trace_replay"
+    else:
+        training_mode = mode
 
-    The initial refresh at control step zero is required synchronously. Later
-    refreshes are serialized through one worker. ``latency_steps`` is the
-    worker service time in control steps, so this also models queueing when a
-    refresh takes longer than its submission interval.
-    """
-    control_step = int(control_step)
-    refresh_interval = int(refresh_interval)
-    latency_steps = int(latency_steps)
-    if control_step < 0:
-        raise ValueError("control_step must be >= 0")
-    if refresh_interval < 1:
-        raise ValueError("refresh_interval must be >= 1")
-    if latency_steps < 0:
-        raise ValueError("latency_steps must be >= 0")
-
-    latest_completed_source = 0
-    previous_completion = 0
-    requested_source = refresh_interval
-    while requested_source <= control_step:
-        start_step = max(requested_source, previous_completion)
-        completion_step = start_step + latency_steps
-        if completion_step > control_step:
-            break
-        latest_completed_source = requested_source
-        previous_completion = completion_step
-        requested_source += refresh_interval
-    return latest_completed_source
+    trace_events = None
+    if training_mode == "trace_replay":
+        trace_events = load_trace_activation_steps(trace_path)
+    runtime_trace_path = (
+        str(pathlib.Path(trace_path).resolve())
+        if runtime_mode == "trace_replay" and trace_path
+        else None
+    )
+    training_trace_path = (
+        str(pathlib.Path(trace_path).resolve())
+        if training_mode == "trace_replay" and trace_path
+        else None
+    )
+    return {
+        "runtime_mode": runtime_mode,
+        "training_mode": training_mode,
+        "fixed_latency_steps": fixed_latency,
+        "runtime_trace_path": runtime_trace_path,
+        "training_trace_path": training_trace_path,
+        "trace_activation_steps": trace_events,
+    }
 
 
 def _json_send(handler, payload):
@@ -183,14 +250,22 @@ def _build_examples(
     frame_ids,
     vlm_refresh_interval,
     asynchronous,
-    training_vlm_latency_steps=0,
+    alignment_mode="fixed_step_delay",
+    fixed_latency_steps=0,
+    trace_activation_steps=None,
 ):
     examples = []
     for frame_id in frame_ids:
         example = copy.deepcopy(dataset[frame_id])
         if asynchronous:
-            anchor_id = _latest_completed_vlm_anchor_step(
-                frame_id, vlm_refresh_interval, training_vlm_latency_steps
+            anchor_id = source_step_at(
+                frame_id,
+                mode=alignment_mode,
+                refresh_interval=vlm_refresh_interval,
+                fixed_latency_steps=(
+                    fixed_latency_steps if alignment_mode == "fixed_step_delay" else None
+                ),
+                trace_activation_steps=trace_activation_steps,
             )
             example["vlm_image"] = copy.deepcopy(dataset[anchor_id]["image"])
             example["vlm_anchor_frame"] = anchor_id
@@ -360,11 +435,19 @@ def main():
         help="control steps between upper VLM refreshes (defaults to 8)",
     )
     parser.add_argument(
-        "--training-vlm-latency-steps",
+        "--alignment-mode",
+        choices=ALIGNMENT_MODES,
+        default=None,
+        help="shared training/runtime alignment mode; wall_clock training uses an explicit replay trace",
+    )
+    parser.add_argument(
+        "--fixed-latency-steps",
         type=int,
         default=None,
-        help="control-step delay used to align training anchors with async cache availability",
+        help="controlled worker delay for fixed_step_delay; never assumed for wall_clock",
     )
+    parser.add_argument("--alignment-trace", type=pathlib.Path, default=None)
+    parser.add_argument("--training-alignment-trace", type=pathlib.Path, default=None)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--skip-simulation", action="store_true")
@@ -388,8 +471,13 @@ def main():
     vlm_refresh_interval = _resolve_async_refresh_interval(
         args.models, args.vlm_refresh_interval, args.async_config
     )
-    training_vlm_latency_steps = _resolve_async_training_latency_steps(
-        args.models, args.training_vlm_latency_steps, args.async_config
+    alignment = _resolve_async_alignment(
+        args.models,
+        args.alignment_mode,
+        args.fixed_latency_steps,
+        args.alignment_trace,
+        args.training_alignment_trace,
+        args.async_config,
     )
     if action_chunk_length < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
@@ -420,19 +508,25 @@ def main():
     heldout = copy.deepcopy(raw_examples[heldout_frame])
     asy_examples = []
     if run_async:
+        training_alignment = alignment["training_mode"]
+        training_latency = alignment["fixed_latency_steps"]
         asy_examples = _build_examples(
             dataset,
             selected,
             vlm_refresh_interval,
             asynchronous=True,
-            training_vlm_latency_steps=training_vlm_latency_steps,
+            alignment_mode=training_alignment,
+            fixed_latency_steps=training_latency or 0,
+            trace_activation_steps=alignment["trace_activation_steps"],
         )
         heldout = _build_examples(
             dataset,
             [heldout_frame],
             vlm_refresh_interval,
             asynchronous=True,
-            training_vlm_latency_steps=training_vlm_latency_steps,
+            alignment_mode=training_alignment,
+            fixed_latency_steps=training_latency or 0,
+            trace_activation_steps=alignment["trace_activation_steps"],
         )[0]
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"
@@ -442,6 +536,15 @@ def main():
     # receives no refresh-cadence config and remains a synchronous baseline.
     if run_async:
         base_cfg.framework.vlm_refresh_interval = vlm_refresh_interval
+        base_cfg.framework.async_alignment = {
+            "mode": alignment["runtime_mode"],
+            "fixed_latency_steps": alignment["fixed_latency_steps"],
+            "trace_path": (
+                str(pathlib.Path(alignment["runtime_trace_path"]).resolve())
+                if alignment["runtime_trace_path"]
+                else None
+            ),
+        }
     base_cfg.datasets.vla_data.obs_image_size = [224, 224]
     base_cfg.trainer.freeze_modules = "qwen_vl_interface,dino_encoder"
 
@@ -449,7 +552,9 @@ def main():
     print(f"[pilot] dataset episode=0 task='put the bowl on the plate' frames={frame_count}")
     cadence_note = (
         f" vlm_refresh_interval={vlm_refresh_interval}"
-        f" training_vlm_latency_steps={training_vlm_latency_steps}"
+        f" runtime_alignment={alignment['runtime_mode']}"
+        f" training_alignment={alignment['training_mode']}"
+        f" fixed_latency_steps={alignment['fixed_latency_steps']}"
         if run_async
         else " stage=1_synchronous"
     )
@@ -467,9 +572,13 @@ def main():
         "training_frames": selected,
         "heldout_frame": heldout_frame,
         "action_horizon": action_chunk_length,
+        "execution_horizon": 1,
         "vlm_refresh_interval": vlm_refresh_interval,
         "vlm_update_interval": vlm_refresh_interval,
-        "training_vlm_latency_steps": training_vlm_latency_steps,
+        "runtime_alignment_mode": alignment["runtime_mode"] if alignment else None,
+        "training_alignment_mode": alignment["training_mode"] if alignment else None,
+        "fixed_latency_steps": alignment["fixed_latency_steps"] if alignment else None,
+        "training_alignment_trace": alignment["training_trace_path"] if alignment else None,
         "training_vlm_alignment": (
             [
                 {"control_step": int(frame), "vlm_anchor_step": int(example["vlm_anchor_frame"])}

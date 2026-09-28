@@ -5,27 +5,31 @@ quality or success-rate evaluation.
 
 ## Measured inference schedule
 
-The LIBERO Goal pilot used `action_horizon=8`, `execution_horizon=1`, and
-`vlm_refresh_interval=8`. It ran 56 control steps, failed the task, and recorded
-per-step `cached_vlm_step` values in
-`playground/Checkpoints/libero_minicpm_pilot/20260928_221032/comparison.json`.
+The corrected-alignment LIBERO Goal pilot used `action_horizon=8`,
+`execution_horizon=1`, `vlm_refresh_interval=8`, and
+`training_vlm_latency_steps=3`. It ran 56 control steps, failed the task, and
+recorded per-step `cached_vlm_step` values in
+`playground/Checkpoints/libero_minicpm_pilot/20260928_222713/comparison.json`.
 The initial step-0 VLM refresh was awaited. Later refresh requests and their
-first action-visible control steps were:
+first action-visible control steps in that run were:
 
 | Requested source frame | First action-visible step | Delay |
 |---:|---:|---:|
 | 8 | 11 | 3 |
 | 16 | 19 | 3 |
-| 24 | 28 | 4 |
+| 24 | 27 | 3 |
 | 32 | 35 | 3 |
 | 40 | 43 | 3 |
 | 48 | 52 | 4 |
 
-Mean VLM refresh time was `0.849 s`; mean/p95 action-policy round-trip time was
-`0.182 s` / `0.281 s`. All seven submitted refreshes completed, with no stale
-results dropped and no queued refresh remaining at episode end. This shows why
-the source image at a refresh boundary is not necessarily the VLM state used by
-the action at that same control step.
+Mean VLM refresh time was `0.760 s`; mean/p95 action-policy round-trip time was
+`0.176 s` / `0.277 s`. All seven submitted refreshes completed, with no stale
+results dropped and no queued refresh remaining at episode end. An earlier
+zero-delay training pilot measured a 4-step delay for the refresh at step 24;
+the corrected run measured 3 steps there. Across both traces, observed delay
+was 3 steps for nine refreshes and 4 steps for three. This shows why the source
+image at a refresh boundary is not necessarily the VLM state used by the action
+at that same control step.
 
 ## Alignment change
 
@@ -41,21 +45,20 @@ anchor(t) = max(0, floor((t - D) / M) * M)
 
 This closed form applies when `D < M`, as in the measured run. The sampler also
 models serialized worker queueing when `D >= M`. The async LIBERO config sets
-`D=3`, the median observed delay. The four training frames `[1,2,9,10]`
-therefore use anchors `[0,0,0,0]`; held-out frame 23 uses anchor 16. This
-aligns those samples with the measured cache schedule. On the full 56-step
-trace, the fixed 3-step estimate matched 54 steps; it was one step early for
-refreshes 24 and 48, whose observed delay was 4. The latency setting can be
+`D=3`, the measured median delay. The four training frames `[1,2,9,10]`
+therefore use anchors `[0,0,0,0]`; held-out frame 23 uses anchor 16. In the
+corrected end-to-end run, all five sampled frames used the same VLM source that
+was active at their corresponding inference steps. Across the full 56-step
+trace, the fixed 3-step estimate matched 55 steps; it was one step early for
+the refresh at step 48, whose observed delay was 4. The latency setting can be
 overridden with `--training-vlm-latency-steps` when the hardware or control
 cadence changes.
 
-A 4-update training smoke with this alignment completed with finite action
-losses and held-out loss `1.7331`; see
-`playground/Checkpoints/libero_minicpm_pilot/20260928_221912/comparison.json`.
-That run skipped simulation. The separate trace run above used the prior
-zero-delay training anchors, so the two artifacts validate the inference trace
-and corrected sample selection independently rather than as one same-run
-closed-loop experiment.
+A 4-update training smoke and its matching 56-step rollout ran in the same
+process with this alignment. Training loss was finite, held-out loss was
+`1.7331`, and the rollout remained unsuccessful. The artifact reports its
+training anchors, per-step inference cache source, action execution horizon,
+and latency metrics in one place.
 
 ## Limits and next checks
 

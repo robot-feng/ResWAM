@@ -161,6 +161,7 @@ def main():
     done = False
     control_steps = 0
     final_server_stats = None
+    async_step_trace = []
 
     with socket.create_connection((args.host, args.port), timeout=300) as sock:
         sock.settimeout(300)
@@ -184,6 +185,18 @@ def main():
             )
             step_latencies.append(time.perf_counter() - started)
             final_server_stats = response.get("async_stats")
+            if final_server_stats is not None:
+                async_step_trace.append(
+                    {
+                        "control_step": control_step,
+                        "cached_vlm_step": final_server_stats.get("latest_vlm_step"),
+                        "vlm_age_steps": final_server_stats.get("vlm_age_steps"),
+                        "vlm_submitted": final_server_stats.get("vlm_submitted"),
+                        "vlm_completed": final_server_stats.get("vlm_completed"),
+                        "queued_refreshes": final_server_stats.get("queued_refreshes"),
+                        "policy_roundtrip_seconds": step_latencies[-1],
+                    }
+                )
             action_norm = _select_executed_action(response["normalized_actions"])
             action = _unnormalize_action(action_norm, action_stats)
             obs, _, done, _ = env.step(action.tolist())
@@ -203,6 +216,7 @@ def main():
         "max_control_steps": args.max_control_steps,
         "execution_horizon": PILOT_EXECUTION_HORIZON,
         "execution_policy": "apply the first predicted action, then request a new chunk next control step",
+        "async_step_trace": async_step_trace,
         "mean_policy_roundtrip_seconds": float(np.mean(step_latencies)) if step_latencies else 0.0,
         "p95_policy_roundtrip_seconds": float(np.percentile(step_latencies, 95)) if step_latencies else 0.0,
         "async_stats": final_server_stats,

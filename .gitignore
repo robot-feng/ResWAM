@@ -242,6 +242,7 @@ wandb/*
 !.github/PULL_REQUEST_TEMPLATE.md
 !examples/modelExtensions/MiniCPM/MiniCPMGR00TRes_ABLATION.md
 !examples/modelExtensions/MiniCPM/MiniCPMGR00TDual_STATUS.md
+!examples/modelExtensions/MiniCPM/MiniCPMGR00TDualAsy_ALIGNMENT.md
 !docs/branching_strategy.md
 !docs/PR_readme.md
 !docs/CONTRIBUTING.md

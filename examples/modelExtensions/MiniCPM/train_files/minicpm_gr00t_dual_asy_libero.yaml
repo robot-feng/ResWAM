@@ -44,6 +44,10 @@ framework:
       output_dim: 1024
       positional_embeddings: null
   vlm_refresh_interval: 8
+  # Training labels use the most recent VLM refresh expected to have finished
+  # by each action step. The current LIBERO smoke observed 3-4 control steps of
+  # refresh latency; override per hardware with --training-vlm-latency-steps.
+  training_vlm_latency_steps: 3
   reduce_in_full_precision: true
 
 datasets:

@@ -64,6 +64,60 @@ def _resolve_async_refresh_interval(models, requested_interval, async_config_pat
     return interval
 
 
+def _resolve_async_training_latency_steps(models, requested_steps, async_config_path):
+    """Resolve the training-side delay before a VLM refresh becomes active."""
+    run_async = "MiniCPMGR00TDualAsy" in models
+    if requested_steps is not None and not run_async:
+        raise ValueError(
+            "--training-vlm-latency-steps is only valid when "
+            "MiniCPMGR00TDualAsy is selected"
+        )
+    if not run_async:
+        return None
+
+    async_cfg = OmegaConf.load(async_config_path)
+    framework_cfg = async_cfg.get("framework") or {}
+    steps = requested_steps
+    if steps is None:
+        steps = framework_cfg.get("training_vlm_latency_steps", 0)
+    steps = int(steps)
+    if steps < 0:
+        raise ValueError("framework.training_vlm_latency_steps must be >= 0")
+    return steps
+
+
+def _latest_completed_vlm_anchor_step(control_step, refresh_interval, latency_steps):
+    """Estimate the newest periodic VLM refresh available at a control step.
+
+    The initial refresh at control step zero is required synchronously. Later
+    refreshes are serialized through one worker. ``latency_steps`` is the
+    worker service time in control steps, so this also models queueing when a
+    refresh takes longer than its submission interval.
+    """
+    control_step = int(control_step)
+    refresh_interval = int(refresh_interval)
+    latency_steps = int(latency_steps)
+    if control_step < 0:
+        raise ValueError("control_step must be >= 0")
+    if refresh_interval < 1:
+        raise ValueError("refresh_interval must be >= 1")
+    if latency_steps < 0:
+        raise ValueError("latency_steps must be >= 0")
+
+    latest_completed_source = 0
+    previous_completion = 0
+    requested_source = refresh_interval
+    while requested_source <= control_step:
+        start_step = max(requested_source, previous_completion)
+        completion_step = start_step + latency_steps
+        if completion_step > control_step:
+            break
+        latest_completed_source = requested_source
+        previous_completion = completion_step
+        requested_source += refresh_interval
+    return latest_completed_source
+
+
 def _json_send(handler, payload):
     handler.wfile.write((json.dumps(payload, separators=(",", ":")) + "\n").encode())
     handler.wfile.flush()
@@ -124,12 +178,20 @@ class _ThreadedTCPServer(socketserver.ThreadingTCPServer):
         self.policy = policy
 
 
-def _build_examples(dataset, frame_ids, vlm_refresh_interval, asynchronous):
+def _build_examples(
+    dataset,
+    frame_ids,
+    vlm_refresh_interval,
+    asynchronous,
+    training_vlm_latency_steps=0,
+):
     examples = []
     for frame_id in frame_ids:
         example = copy.deepcopy(dataset[frame_id])
         if asynchronous:
-            anchor_id = frame_id - frame_id % vlm_refresh_interval
+            anchor_id = _latest_completed_vlm_anchor_step(
+                frame_id, vlm_refresh_interval, training_vlm_latency_steps
+            )
             example["vlm_image"] = copy.deepcopy(dataset[anchor_id]["image"])
             example["vlm_anchor_frame"] = anchor_id
         examples.append(example)
@@ -297,6 +359,12 @@ def main():
         default=None,
         help="control steps between upper VLM refreshes (defaults to 8)",
     )
+    parser.add_argument(
+        "--training-vlm-latency-steps",
+        type=int,
+        default=None,
+        help="control-step delay used to align training anchors with async cache availability",
+    )
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--skip-simulation", action="store_true")
@@ -320,6 +388,9 @@ def main():
     vlm_refresh_interval = _resolve_async_refresh_interval(
         args.models, args.vlm_refresh_interval, args.async_config
     )
+    training_vlm_latency_steps = _resolve_async_training_latency_steps(
+        args.models, args.training_vlm_latency_steps, args.async_config
+    )
     if action_chunk_length < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
 
@@ -342,24 +413,27 @@ def main():
         raise ValueError(f"episode 0 has too few valid frames for {args.train_steps} updates")
     selected = selected[: args.train_steps]
 
-    # Materialize only the selected single-trajectory samples and their anchor
-    # frames. No mixture sampling or other episode is used in this pilot.
-    raw_examples = {frame: dataset[frame] for frame in set(selected + [16, 23]) if frame < max_frame}
+    # Materialize only the selected single-trajectory samples. No mixture
+    # sampling or other episode is used in this pilot.
     heldout_frame = min(23, max_frame - 1)
-    heldout = copy.deepcopy(raw_examples.get(heldout_frame) or dataset[heldout_frame])
+    raw_examples = {frame: dataset[frame] for frame in set(selected + [heldout_frame])}
+    heldout = copy.deepcopy(raw_examples[heldout_frame])
     asy_examples = []
     if run_async:
-        for frame in selected:
-            example = copy.deepcopy(raw_examples[frame])
-            anchor = frame - frame % vlm_refresh_interval
-            if anchor not in raw_examples:
-                raw_examples[anchor] = dataset[anchor]
-            example["vlm_image"] = copy.deepcopy(raw_examples[anchor]["image"])
-            example["vlm_anchor_frame"] = anchor
-            asy_examples.append(example)
-        heldout["vlm_image"] = copy.deepcopy(
-            dataset[heldout_frame - heldout_frame % vlm_refresh_interval]["image"]
+        asy_examples = _build_examples(
+            dataset,
+            selected,
+            vlm_refresh_interval,
+            asynchronous=True,
+            training_vlm_latency_steps=training_vlm_latency_steps,
         )
+        heldout = _build_examples(
+            dataset,
+            [heldout_frame],
+            vlm_refresh_interval,
+            asynchronous=True,
+            training_vlm_latency_steps=training_vlm_latency_steps,
+        )[0]
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"
     base_cfg.framework.qwenvl.attn_implementation = "sdpa"
@@ -375,6 +449,7 @@ def main():
     print(f"[pilot] dataset episode=0 task='put the bowl on the plate' frames={frame_count}")
     cadence_note = (
         f" vlm_refresh_interval={vlm_refresh_interval}"
+        f" training_vlm_latency_steps={training_vlm_latency_steps}"
         if run_async
         else " stage=1_synchronous"
     )
@@ -394,6 +469,16 @@ def main():
         "action_horizon": action_chunk_length,
         "vlm_refresh_interval": vlm_refresh_interval,
         "vlm_update_interval": vlm_refresh_interval,
+        "training_vlm_latency_steps": training_vlm_latency_steps,
+        "training_vlm_alignment": (
+            [
+                {"control_step": int(frame), "vlm_anchor_step": int(example["vlm_anchor_frame"])}
+                for frame, example in zip(selected, asy_examples)
+            ]
+            if run_async
+            else None
+        ),
+        "heldout_vlm_anchor_step": heldout.get("vlm_anchor_frame"),
         "max_control_steps": args.max_control_steps,
         "models": {},
     }

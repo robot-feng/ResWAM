@@ -13,7 +13,12 @@ from starVLA.model.framework.VLM4A.MiniCPMGR00TDual import (
 from starVLA.model.framework.VLM4A.MiniCPMGR00T import MiniCPM_GR00T
 from starVLA.model.framework.VLM4A.QwenDual import Qwen_Dual
 from starVLA.model.tools import FRAMEWORK_REGISTRY
-from examples.modelExtensions.MiniCPM.libero_dual_pilot import _resolve_async_refresh_interval
+from examples.modelExtensions.MiniCPM.libero_dual_pilot import (
+    _build_examples,
+    _latest_completed_vlm_anchor_step,
+    _resolve_async_refresh_interval,
+    _resolve_async_training_latency_steps,
+)
 
 
 def test_minicpm_gr00t_dual_registry_is_independent():
@@ -44,16 +49,48 @@ def test_stage1_pilot_does_not_load_async_config(tmp_path):
         _resolve_async_refresh_interval(
             ["MiniCPMGR00TDual"], 8, missing_async_config
         )
+    assert _resolve_async_training_latency_steps(
+        ["MiniCPMGR00TDual"], None, missing_async_config
+    ) is None
+    with pytest.raises(ValueError, match="only valid when MiniCPMGR00TDualAsy is selected"):
+        _resolve_async_training_latency_steps(
+            ["MiniCPMGR00TDual"], 3, missing_async_config
+        )
 
 
 def test_async_pilot_refresh_setting_is_explicit_and_validated(tmp_path):
     async_config = tmp_path / "async.yaml"
-    async_config.write_text("framework:\n  vlm_refresh_interval: 6\n", encoding="utf-8")
+    async_config.write_text(
+        "framework:\n  vlm_refresh_interval: 6\n  training_vlm_latency_steps: 3\n",
+        encoding="utf-8",
+    )
     models = ["MiniCPMGR00TDual", "MiniCPMGR00TDualAsy"]
     assert _resolve_async_refresh_interval(models, None, async_config) == 6
     assert _resolve_async_refresh_interval(models, 3, async_config) == 3
     with pytest.raises(ValueError, match="must be >= 1"):
         _resolve_async_refresh_interval(models, 0, async_config)
+    assert _resolve_async_training_latency_steps(models, None, async_config) == 3
+    assert _resolve_async_training_latency_steps(models, 2, async_config) == 2
+    with pytest.raises(ValueError, match="training_vlm_latency_steps must be >= 0"):
+        _resolve_async_training_latency_steps(models, -1, async_config)
+
+
+def test_async_training_anchor_tracks_latest_completed_refresh():
+    anchor = lambda step: _latest_completed_vlm_anchor_step(step, 8, 3)
+    assert [anchor(step) for step in (0, 7, 8, 9, 10, 11, 18, 19, 23)] == [
+        0, 0, 0, 0, 0, 8, 8, 16, 16
+    ]
+    queued_anchor = lambda step: _latest_completed_vlm_anchor_step(step, 8, 9)
+    assert [queued_anchor(step) for step in (8, 16, 17, 25, 26, 35)] == [
+        0, 0, 8, 8, 16, 24
+    ]
+
+    dataset = [{"image": [step], "action": step} for step in range(24)]
+    examples = _build_examples(dataset, [1, 2, 9, 10, 11, 19], 8, True, 3)
+    assert [example["vlm_anchor_frame"] for example in examples] == [0, 0, 0, 0, 8, 16]
+    assert [example["vlm_image"] for example in examples] == [
+        dataset[anchor]["image"] for anchor in (0, 0, 0, 0, 8, 16)
+    ]
 
 
 def test_minicpm_gr00t_dual_builds_joint_vlm_dino_condition(monkeypatch):

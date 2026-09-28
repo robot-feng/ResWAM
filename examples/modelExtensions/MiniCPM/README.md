@@ -70,7 +70,7 @@ Only **3 core files + examples** — mirrors the Gemma4/Molmo2 integration patte
 The model work is split so each change can be measured independently:
 
 1. **`MiniCPMGR00TDual` (implemented):** one VLM pass plus DINO patch features condition the existing GR00T flow-matching action head. This is the synchronous dual-stream baseline.
-2. **`MiniCPMGR00TDualAsy` (implemented for the pilot):** DINO and the action head consume the current observation every control step. MiniCPM refreshes in a background worker once per `vlm_refresh_interval` control steps and the action head uses the newest completed VLM snapshot. Training samples carry the matching low-rate anchor image as `vlm_image`.
+2. **`MiniCPMGR00TDualAsy` (implemented for the pilot):** DINO and the action head consume the current observation every control step. MiniCPM refreshes in a background worker once per `vlm_refresh_interval` control steps and the action head uses the newest completed VLM snapshot. Training samples carry as `vlm_image` the refresh frame expected to have completed by that action step, using `framework.training_vlm_latency_steps`.
 3. **ResWAM upper representation + ordinary GR00T (later):** train the upper VLM to represent task-conditioned terminal change with DINO residual supervision, then expose that representation to the standard GR00T action system. Compare against the synchronous and asynchronous baselines.
 
 Keep these horizons separate:
@@ -79,6 +79,7 @@ Keep these horizons separate:
 - `action_model.execution_horizon` is the number of actions emitted/committed for execution in policies that implement chunked execution, such as RollFlow. It can be shorter than `action_horizon`.
 - `framework.vlm_refresh_interval` is how many low-level control steps pass between upper VLM refreshes. The pilot predicts an action chunk at each control step but applies only its first action; it refreshes MiniCPM every 8 steps by default. Equal default values do not make these parameters interchangeable.
 - In the current DualAsy pilot, `action_horizon=8`, the evaluator consumes one action per control step (`execution_horizon=1` by policy), and `vlm_refresh_interval=8`. Thus the observed 8:1 cadence is the VLM refresh interval relative to low-level control; it does not equate predicted chunk length with executed chunk length. Other evaluators may commit a whole chunk and therefore choose `execution_horizon=action_horizon`.
+- Inference runs a VLM refresh concurrently with low-rate action calls. The current LIBERO trace observed refresh activation delays of 3–4 control steps (`training_vlm_latency_steps=3` uses the measured median): requests at steps 8, 16, 24, 32, 40, and 48 first became active at steps 11, 19, 28, 35, 43, and 52. The pilot now records the per-step cached VLM source and age. Recalibrate this training alignment value when the inference hardware or control cadence changes; a fixed delay of 3 still differs from two of the 56 observed steps.
 - Stage-1 ResWAM uses an explicitly annotated successful terminal frame as its residual target. That is a goal target, not a fixed numeric prediction horizon.
 
 Stage 1 uses `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml` and runs independently by default:

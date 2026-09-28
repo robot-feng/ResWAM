@@ -61,8 +61,31 @@ Only **3 core files + examples** — mirrors the Gemma4/Molmo2 integration patte
 | `starVLA/model/modules/vlm/MiniCPM_V.py` | `_MiniCPM_VL_Interface` — matches `_QWen3_VL_Interface` API |
 | `starVLA/model/framework/VLM4A/MiniCPMPI.py` | `MiniCPM_PI(Qwen_PI)` thin subclass |
 | `starVLA/model/framework/VLM4A/MiniCPMGR00T.py` | `MiniCPM_GR00T(Qwen_GR00T)` thin subclass |
+| `starVLA/model/framework/VLM4A/MiniCPMGR00TDual.py` | MiniCPM-V + DINOv2 dual-stream action policy, based on `QwenDual` |
 | `examples/modelExtensions/MiniCPM/eval_libero_local.py` | In-process LIBERO evaluation for `MiniCPM_PI` checkpoints |
 | `starVLA/model/modules/vlm/__init__.py` | MiniCPM-V dispatcher branch |
+
+## Dual-system development stages
+
+The model work is split so each change can be measured independently:
+
+1. **`MiniCPMGR00TDual` (implemented):** one VLM pass plus DINO patch features condition the existing GR00T flow-matching action head. This is the synchronous dual-stream baseline.
+2. **`MiniCPMGR00TDualAsy` (next):** decouple the slower VLM refresh from the faster DINO/action loop. Training and inference must agree on refresh cadence, timestamps, cache lifetime, and which observation each action chunk consumes; these alignment choices need their own validation and ablations.
+3. **ResWAM upper representation + ordinary GR00T (later):** train the upper VLM to represent task-conditioned terminal change with DINO residual supervision, then expose that representation to the standard GR00T action system. Compare against the synchronous and asynchronous baselines.
+
+The stage-1 example config is `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml`. Update its local dataset path and mix before training. A registry/config smoke test is available as:
+
+```bash
+conda activate ResWAM
+pytest -q tests/test_minicpm_gr00t_dual.py
+```
+
+The model can also run its local end-to-end smoke path (which loads MiniCPM-V and DINOv2) with:
+
+```bash
+conda activate ResWAM
+python starVLA/model/framework/VLM4A/MiniCPMGR00TDual.py
+```
 
 ## Notes
 

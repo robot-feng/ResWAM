@@ -70,15 +70,19 @@ Only **3 core files + examples** — mirrors the Gemma4/Molmo2 integration patte
 The model work is split so each change can be measured independently:
 
 1. **`MiniCPMGR00TDual` (implemented):** one VLM pass plus DINO patch features condition the existing GR00T flow-matching action head. This is the synchronous dual-stream baseline.
-2. **`MiniCPMGR00TDualAsy` (next):** decouple the slower VLM refresh from the faster DINO/action loop. Training and inference must agree on refresh cadence, timestamps, cache lifetime, and which observation each action chunk consumes; these alignment choices need their own validation and ablations.
+2. **`MiniCPMGR00TDualAsy` (implemented for the pilot):** DINO and the action head consume the current observation every control step. MiniCPM refreshes in a background worker once per `execution_horizon` control steps and the action head uses the newest completed VLM snapshot. Training samples carry the matching low-rate anchor image as `vlm_image`. `action_model.action_horizon` is the number of actions predicted per model call; `action_model.execution_horizon` is the number of low-level control steps between upper VLM refreshes. These are separate settings. The pilot defaults both to 8, but either can be changed independently.
 3. **ResWAM upper representation + ordinary GR00T (later):** train the upper VLM to represent task-conditioned terminal change with DINO residual supervision, then expose that representation to the standard GR00T action system. Compare against the synchronous and asynchronous baselines.
 
-The stage-1 example config is `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml`. Update its local dataset path and mix before training. A registry/config smoke test is available as:
+The stage-1 example config is `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_libero.yaml`; stage 2 uses `examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_dual_asy_libero.yaml`. The asynchronous config has independent prediction and execution horizons. The pilot calls DINO and the action head at every control step, applies the first action from that step's predicted chunk, and refreshes the VLM at the `execution_horizon` cadence. A quick same-trajectory pipeline comparison is:
 
 ```bash
 conda activate ResWAM
-pytest -q tests/test_minicpm_gr00t_dual.py
+python examples/modelExtensions/MiniCPM/libero_dual_pilot.py \
+  --train-steps 4 \
+  --max-control-steps 56
 ```
+
+The pilot reads only episode 0 of `libero_goal_no_noops_1.0.0_lerobot` ("put the bowl on the plate"), freezes MiniCPM-V and DINO, trains each action policy for four updates, then runs one matching LIBERO task in the separate `libero` environment. It writes train losses, rollout results, per-step latency, async refresh counts, and rollout videos under `playground/Checkpoints/libero_minicpm_pilot/`. This is an end-to-end smoke comparison, not a statistically meaningful success-rate benchmark.
 
 The model can also run its local end-to-end smoke path (which loads MiniCPM-V and DINOv2) with:
 

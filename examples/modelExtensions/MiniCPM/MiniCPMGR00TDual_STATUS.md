@@ -31,15 +31,20 @@ and configurable `action_horizon=3` / `action_dim=4` for both training labels
 and prediction shape. Pilot config resolution is also checked: stage 1 does not
 open an async config or accept an async refresh interval.
 
-A previous real MiniCPM/DINO LIBERO smoke row used four optimizer updates on
-episode 0 frames `[1,2,9,10]`, with frame 23 for held-out action loss. The VLM
-and DINO backbone were frozen; 142.99M action-head/projection parameters were
-trainable. Training loss moved from `1.3858` to `1.5064`; held-out loss was
-`1.7195`. The matching LIBERO Goal rollout ran 56 control steps and failed to
-complete the task; mean and p95 policy round-trip latencies were `0.873 s` and
-`1.044 s`. This proves that the real model and simulator path ran, but it does
-not establish policy quality. The row came from the 2026-09-28 smoke output
-under `playground/Checkpoints/libero_minicpm_pilot/20260928_151100/`.
+A stage-1-only real-model smoke ran four optimizer updates on episode 0 frames
+`[1,2,9,10]`, with frame 23 for held-out action loss. The VLM and DINO backbone
+were frozen; 142.99M action-head/projection parameters were trainable. Losses
+were `[1.3858, 1.0644, 1.3148, 1.5064]`, held-out loss was `1.7195`, and the
+four updates took `9.95 s`. It ran with `--skip-simulation`; its artifact is
+`playground/Checkpoints/libero_minicpm_pilot/20260928_215834/comparison.json`.
+This validates the isolated training path, not policy quality.
+
+A prior LIBERO Goal rollout ran 56 control steps and failed to complete the
+task; mean and p95 policy round-trip latencies were `0.873 s` and `1.044 s`.
+That rollout came from the earlier comparison smoke at
+`playground/Checkpoints/libero_minicpm_pilot/20260928_151100/`, before the
+current isolated pilot and evaluator metadata change. It proves the real
+simulator path ran, but does not establish policy quality.
 
 In that rollout, the action head predicted a chunk of `action_horizon=8`, but
 the evaluator used `chunk[0]` and requested a fresh prediction on the next
@@ -56,8 +61,8 @@ separate LIBERO environment.
 
 ## Still needed
 
-- Repeat the real training smoke after the current config/pilot isolation
-  changes and preserve a stage-1-only result artifact.
+- Run the current stage-1-only pilot through LIBERO evaluation so the new
+  per-rollout `execution_horizon=1` metadata is exercised in a fresh artifact.
 - Evaluate more than one task and multiple seeds before making success-rate
   claims. The existing four-update smoke failed its single rollout.
 - Validate checkpoint save/load for a trained MiniCPMGR00TDual checkpoint and

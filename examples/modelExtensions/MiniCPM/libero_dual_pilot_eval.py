@@ -21,6 +21,8 @@ import time
 import numpy as np
 from PIL import Image
 
+PILOT_EXECUTION_HORIZON = 1
+
 
 def _request(sock, payload):
     sock.sendall((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
@@ -169,7 +171,12 @@ def main():
             final_server_stats = response.get("async_stats")
             chunk = np.asarray(response["normalized_actions"], dtype=np.float32)
             if chunk.ndim == 2:
-                action_norm = chunk[0]
+                if chunk.shape[0] < PILOT_EXECUTION_HORIZON:
+                    raise ValueError(
+                        f"policy predicted {chunk.shape[0]} actions, but the evaluator "
+                        f"needs {PILOT_EXECUTION_HORIZON} to execute"
+                    )
+                action_norm = chunk[:PILOT_EXECUTION_HORIZON][0]
             elif chunk.ndim == 1:
                 action_norm = chunk
             else:
@@ -190,6 +197,8 @@ def main():
         "success": bool(done),
         "control_steps": control_steps,
         "max_control_steps": args.max_control_steps,
+        "execution_horizon": PILOT_EXECUTION_HORIZON,
+        "execution_policy": "apply the first predicted action, then request a new chunk next control step",
         "mean_policy_roundtrip_seconds": float(np.mean(step_latencies)) if step_latencies else 0.0,
         "p95_policy_roundtrip_seconds": float(np.percentile(step_latencies, 95)) if step_latencies else 0.0,
         "async_stats": final_server_stats,

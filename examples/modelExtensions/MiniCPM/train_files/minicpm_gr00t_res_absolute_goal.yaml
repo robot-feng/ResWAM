@@ -1,0 +1,8 @@
+# Target-space ablation: predict the absolute terminal DINO feature instead of
+# the current-to-terminal residual. No other model/data setting changes.
+defaults:
+  - minicpm_gr00t_res_libero
+
+framework:
+  residual_model:
+    prediction_target: absolute_goal

@@ -60,8 +60,8 @@ def _asy_config(config):
         "state_dim": 7,
         "action_horizon": 8,
         # Number of low-level control steps between upper VLM refreshes.
-        # It is independent from action_horizon (the predicted action chunk).
-        "execution_horizon": None,
+        # This is independent from action_horizon (the predicted action chunk).
+        "execution_horizon": 8,
         "num_inference_timesteps": 4,
         "num_target_vision_tokens": 32,
         "noise_beta_alpha": 1.5,
@@ -89,16 +89,8 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         cfg = _asy_config(config)
         super().__init__(config=cfg, **kwargs)
         # action_horizon is the predicted action chunk length. execution_horizon
-        # is the number of low-level control steps per upper-system refresh.
-        # Older configs without execution_horizon retain their former cadence.
-        configured_execution_horizon = self.config.framework.action_model.get(
-            "execution_horizon"
-        )
-        self.execution_horizon = int(
-            configured_execution_horizon
-            if configured_execution_horizon is not None
-            else self.action_horizon
-        )
+        # is the independent number of low-level control steps per VLM refresh.
+        self.execution_horizon = int(self.config.framework.action_model.execution_horizon)
         self.vlm_update_interval = self.execution_horizon
         if self.vlm_update_interval < 1:
             raise ValueError("framework.action_model.execution_horizon must be >= 1")

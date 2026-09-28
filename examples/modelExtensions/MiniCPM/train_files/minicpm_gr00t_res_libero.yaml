@@ -1,0 +1,55 @@
+# Residual upper system. This predicts the explicitly annotated successful
+# terminal DINO feature target; it does not sample a numeric future horizon.
+run_id: minicpm_gr00t_res_libero
+run_root_dir: playground/Checkpoints
+seed: 42
+
+framework:
+  name: MiniCPMGR00TRes
+  qwenvl:
+    base_vlm: /data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6
+    attn_implementation: sdpa
+    enable_gradient_checkpointing: true
+  dino:
+    dino_backbone: dinov2_vits14
+    image_size: 224
+    camera_key: video.primary_image
+  residual_model:
+    num_residual_tokens: 256
+    hidden_dim: 512
+    num_residual_blocks: 2
+    prediction_target: residual
+    goal_target: successful_terminal
+    text_loss_weight: 0.1
+    max_context_tokens: 16384
+    history_mode: full
+    video_fps: 10.0
+    video_downsample_mode: 16x
+  runtime:
+    execution_horizon: 8
+    cache_mode: recompute
+
+datasets:
+  residual_data:
+    data_root_dir: /data/tzq/datasets/starVLA/Datasets/libero_10hz
+    dataset_name: libero_goal_no_noops_1.0.0_lerobot
+    robot_type: libero_franka
+    camera_key: video.primary_image
+    video_backend: torchvision_av
+    # Populate this manifest from verified simulator success annotations.
+    # Missing annotations fail fast; recorded end-of-file frames are not labels.
+    success_terminal_manifest: playground/Annotations/libero_success_terminals.jsonl
+    assistant_label_manifest: null
+    max_history_frames: null
+
+trainer:
+  per_device_batch_size: 1
+  num_workers: 0
+  max_train_steps: 1000
+  learning_rate: 1.0e-5
+  weight_decay: 1.0e-8
+  max_grad_norm: 1.0
+  log_every: 10
+  save_every: 100
+  gradient_accumulation_steps: 1
+  output_dir: playground/Checkpoints/minicpm_gr00t_res_libero

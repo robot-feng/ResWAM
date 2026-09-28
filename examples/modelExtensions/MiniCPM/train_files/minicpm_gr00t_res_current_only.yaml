@@ -1,0 +1,7 @@
+# History ablation: use only the current primary-camera frame.
+defaults:
+  - minicpm_gr00t_res_libero
+
+framework:
+  residual_model:
+    history_mode: current_only

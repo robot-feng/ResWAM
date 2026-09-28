@@ -274,7 +274,7 @@ def main():
         "--execution-horizon",
         type=int,
         default=None,
-        help="low-level control steps between VLM refreshes (defaults to async config)",
+        help="low-level control steps between VLM refreshes (defaults independently to 8)",
     )
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=1234)
@@ -295,11 +295,13 @@ def main():
     )
     prediction_horizon = int(base_cfg.framework.action_model.action_horizon)
     async_cfg = OmegaConf.load(args.async_config)
-    execution_horizon = int(
-        args.execution_horizon
-        if args.execution_horizon is not None
-        else async_cfg.framework.action_model.get("execution_horizon", prediction_horizon)
-    )
+    configured_execution_horizon = async_cfg.framework.action_model.get("execution_horizon")
+    execution_horizon = args.execution_horizon
+    if execution_horizon is None:
+        execution_horizon = configured_execution_horizon
+    if execution_horizon is None:
+        execution_horizon = 8
+    execution_horizon = int(execution_horizon)
     if prediction_horizon < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
     if execution_horizon < 1:

@@ -19,12 +19,21 @@ effectiveness claim.
 - Separate residual and optional assistant-text forwards; only assistant
   answer tokens contribute to text loss. DINO teacher and the MiniCPM visual
   tower/merger are frozen while LM and residual head stay trainable.
+- History ablation evaluator can mask the oldest, middle, or most recent past
+  frame with a neutral image while retaining its timestamp and sequence slot.
 - Streaming `reset_episode`, `observe`, `predict_goal`; default refresh interval
   is `runtime.execution_horizon: 8`. It does not read a lower policy's
   `action_horizon`.
 - Dedicated trainer, zero-residual comparison/profile evaluator, configs for
   full-history/current-only and residual/absolute-goal ablations, strict
   trainable-weight checkpoint plus tokenizer/teacher/config metadata.
+- Evaluation CLI supports oldest/middle/most-recent-previous history-frame
+  masking while retaining frame order, timestamps, and context length.
+- Optional inference-only hybrid prefix cache: prefill the complete task and
+  video history, append each newly received frame batch at the VLM refresh,
+  and execute residual queries against a cloned cache. Full recomputation is
+  still the default. Prefix mode periodically checks decoded residual outputs
+  and falls back for the episode if its configured error limit is exceeded.
 
 ## Verified
 
@@ -46,6 +55,47 @@ effectiveness claim.
 - Runtime fake-policy test confirmed refresh at control steps 0, 8, and 16,
   retention of all 17 received frames, and plan age 7 immediately before the
   second refresh.
+- Processor block test confirmed task plus frame message token IDs exactly
+  concatenate to the full-history token IDs; grouped 5-frame video pixels and
+  target sizes exactly matched concatenated per-frame blocks.
+- Installed MiniCPM-V 4.6 GPU cache comparison ran both an initial prefill and
+  a later 8-frame append. With a randomly initialized residual decoder, the
+  cached residual output was 2.42% relative RMS from full-history recompute
+  (cosine similarity 0.9997). A teacher-forced text check had 2.1% relative
+  RMS logit drift and 10/11 next-token argmax matches. This supports the
+  inference cache path but does not claim exact text generation or validation
+  for a trained checkpoint.
+- Framework-level GPU smoke ran 9 frames through `observe` with an 8-step
+  execution horizon. It refreshed at steps 0 and 8, appended the intervening 8
+  frames in one cache update, and validated both outputs against full
+  recomputation. Residual relative RMS differences were 2.48% and 2.38%; the
+  cache stayed enabled under the default 5% threshold. The report was written
+  to `/tmp/reswam_prefix_cache_smoke.json`.
+- Focused components and Dual compatibility tests: `14 passed`; Python
+  compilation and `git diff --check` passed.
+- Full-size checkpoint round-trip used the actual model with 334 trainable
+  tensors. After saving a 1.51 GB temporary checkpoint, mutating a trainable
+  parameter, and loading it back, a byte digest of every trainable tensor
+  matched exactly. This also surfaced and fixed a missing `torch.no_grad()` in
+  strict restore.
+- Separate synthetic backward checks passed for residual and assistant-text
+  losses. Each reached 320 trainable VLM tensors; residual loss reached the
+  prediction-token embedding and all 14 decoder tensors, while text loss
+  reached the LM head. DINO teacher and vision tower/merger remained without
+  gradients.
+- Added an unlabeled synthetic profiler for 1/8/32-frame histories. It records
+  preprocessing, VLM, query/head, current-DINO latency, context tokens, and
+  peak CUDA allocation without presenting the results as task performance.
+- One synthetic inference profile measured 1 frame / 417 tokens at 2.68 s and
+  6.02 GB peak CUDA allocation; 8 frames / 1,179 tokens at 3.17 s and 13.76 GB.
+  A one-frame synthetic joint-loss forward/backward took 4.37 s and peaked at
+  5.71 GB, with finite gradients in all 334 trainable tensors and no optimizer
+  step. These are single-run engineering numbers, not latency benchmarks.
+- A 32-frame / 3,836-token synthetic input exceeded available GPU memory during
+  concurrent use: another process occupied about 58.6 GB of the 80 GB A100.
+  This does not establish a model-imposed 32-frame limit; it means the current
+  shared-GPU run only verified up to 8 frames. Report:
+  `/tmp/reswam_synthetic_profile.json`.
 
 ## Not yet verified / blocked on data or further implementation
 
@@ -53,14 +103,14 @@ effectiveness claim.
   manifest. Real training, the zero-residual baseline comparison, and
   few-sample overfit therefore have not been run. The trainer intentionally
   fails until that explicit manifest is supplied.
-- Shared-prefix hybrid KV/linear-state caching has not been implemented or
-  numerically certified. Full-history recomputation is the only accepted mode;
-  `cache_mode: prefix` fails fast. This is required before claiming the
-  SimpleMemVLA-style memory speedup.
-- Full checkpoint save/reload round-trip has not been run against the large
-  trainable VLM state. Metadata checks include tokenizer vocabulary hash,
-  residual token ID, DINO weight hash, preprocessing, and trainable parameter
-  schema.
-- No benchmark latencies or peak-memory figures have been captured. The eval
-  tool records them once the success annotations/checkpoint are available.
+- Cache validation used a randomly initialized residual decoder because no
+  trained checkpoint exists yet. Prefix mode defaults to a 5% decoded-residual
+  relative RMS limit, validates the first refresh and then every 8th refresh,
+  and falls back to recomputation for the episode on failure. Text logits show
+  measurable numerical drift; deterministic text generation must use
+  recomputation or receive its own validation.
+- No latency, peak-memory, or residual-vs-zero comparison has been measured on
+  a verified LIBERO terminal manifest or trained checkpoint. The current
+  latency and memory profile uses synthetic images and one run per history
+  length; the labeled-data evaluator remains available for the real experiment.
 - No rollout-success or cross-embodiment result is claimed.

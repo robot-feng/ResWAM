@@ -163,6 +163,34 @@ class MiniCPMVideoHistoryAdapter:
         selected = list(history) if history_mode == "full" else [history[-1]]
         return self.tokenize(messages, selected, device=device)
 
+    def tokenize_history_blocks(
+        self,
+        instruction: str,
+        episode_id: str,
+        history: Sequence[HistoryFrame],
+        history_mode: str = "full",
+        device: torch.device | str | None = None,
+    ) -> list[dict[str, torch.Tensor]]:
+        """Tokenize the task and each one-frame message as appendable blocks.
+
+        MiniCPM's chat template gives each message a self-contained
+        ``<|im_start|>...<|im_end|>`` span. Concatenating these unpadded blocks
+        reproduces the token sequence of ``tokenize_history_query`` exactly;
+        the query is intentionally returned separately so it stays temporary.
+        """
+        messages = self.history_messages(instruction, episode_id, history, history_mode)
+        selected = list(history) if history_mode == "full" else [history[-1]]
+        blocks = [self.tokenize([messages[0]], device=device)]
+        blocks.extend(
+            self.tokenize([self.frame_message(frame)], [frame], device=device)
+            for frame in selected
+        )
+        return blocks
+
+    def tokenize_query_block(self, device: torch.device | str | None = None) -> dict[str, torch.Tensor]:
+        """Tokenize only the temporary residual-query chat message."""
+        return self.tokenize([self.query_message()], device=device)
+
     def tokenize_history_with_text(
         self,
         instruction: str,

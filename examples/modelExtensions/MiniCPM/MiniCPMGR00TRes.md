@@ -68,6 +68,25 @@ conda run -n ResWAM python examples/modelExtensions/MiniCPM/eval_files/eval_mini
   --checkpoint playground/Checkpoints/minicpm_gr00t_res_libero/final
 ```
 
+To measure whether a specific past observation helps, keep the sequence and
+timestamp in place but replace its image with a neutral gray frame. For example,
+run `--mask-history-frame oldest`, `middle`, or `most_recent_previous`; compare
+the resulting residual MSE with the unmasked run and the `current_only` config.
+
+Without labeled terminal data, profile the engineering path on synthetic
+histories (this is not a task-performance result):
+
+```bash
+conda run -n ResWAM python examples/modelExtensions/MiniCPM/eval_files/profile_minicpm_gr00t_res_synthetic.py \
+  --history-lengths 1,8,32 \
+  --training-smoke \
+  --output /tmp/reswam_synthetic_profile.json
+```
+
+`--training-smoke` also runs one synthetic forward/backward to record training
+memory and gradient flow; it does not take an optimizer step or measure task
+learning.
+
 `minicpm_gr00t_res_current_only.yaml` ablates history; `minicpm_gr00t_res_absolute_goal.yaml`
 ablate the residual target for an absolute-goal target. Context history is not
 silently sampled or truncated. Inputs over the configured 16,384-token budget
@@ -86,11 +105,43 @@ Call `reset_episode`, then `observe(image, control_step, timestamp_seconds,
 instruction, episode_id)` for every incoming frame. `observe` records every
 frame and refreshes `predict_goal` initially and after each configured
 `execution_horizon`; each result reports `plan_age`, current history size, and
-the reference timestamp. `predict_goal` can also be called directly.
+the reference timestamp. While a cached plan is being reused,
+`history_frame_count` tracks received frames and `plan_history_frame_count`
+tracks how many frames were used to produce that plan. `predict_goal` can also
+be called directly.
 
-The correctness path currently recomputes the full history at each refresh.
-MiniCPM's video processor can preserve every frame with sampling disabled and
-stable per-frame blocks, but cached-prefix equivalence across its hybrid
-attention state has not yet been implemented or numerically certified. The
-model rejects a requested prefix-cache mode instead of silently using an
-uncertified cache. This remains an open implementation/validation item.
+By default, the model recomputes the full history at each refresh.
+`runtime.cache_mode: prefix` opts into MiniCPM's hybrid KV and linear-state
+cache. It prefills the task plus all frames received so far, appends each
+subsequent batch of frames at the next VLM refresh, and runs the residual query
+on a copy of the persistent cache so the query itself is not saved as history.
+This mode requires `history_mode: full`; the default remains `recompute`.
+
+Prefix mode compares the decoded residual with full-history recomputation on
+the first refresh and every `runtime.prefix_cache_validate_every` refreshes
+(default 8). If the relative RMS difference exceeds
+`runtime.prefix_cache_max_relative_rms` (default 0.05), or a cache operation
+fails, it disables the cache for that episode and returns the recomputed result.
+The result includes `cache_mode`, `cache_context_validated`, the most recent
+validation error, and any fallback reason. An episode reset clears the cache
+and starts validation again.
+
+The installed MiniCPM-V 4.6 model was exercised on a real GPU with synthetic
+timestamped frames. With one initial frame followed by an 8-frame append, the
+random residual head's cached output had 2.42% relative RMS error and cosine
+similarity 0.9997 against full-history recomputation. An additional
+teacher-forced text check had 2.1% relative RMS logit error and 10/11 next-token
+argmax matches. These numbers establish that the cache path executes and show
+the current numerical drift; they are not a guarantee for trained checkpoints
+or generated text. Re-run the comparison with the trained checkpoint using:
+
+```bash
+conda run -n ResWAM python examples/modelExtensions/MiniCPM/eval_files/validate_minicpm_gr00t_res_cache.py \
+  --config examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_res_libero.yaml \
+  --checkpoint playground/Checkpoints/minicpm_gr00t_res_libero/final
+```
+
+The script compares the prefill and a subsequent multi-frame append. Use the
+full-history `recompute` mode when an experiment requires numerically
+identical predictions. Training always recomputes the input sequence; this
+cache is inference-only.

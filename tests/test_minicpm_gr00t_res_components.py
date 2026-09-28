@@ -71,6 +71,14 @@ def test_execution_horizon_is_independent_of_action_horizon():
     assert async_cfg.framework.action_model.execution_horizon == 5
 
 
+def test_prefix_cache_is_opt_in_and_has_a_decoded_output_tolerance():
+    cfg = _as_config({"framework": {"runtime": {"cache_mode": "prefix"}}})
+    assert cfg.framework.runtime.cache_mode == "prefix"
+    assert cfg.framework.runtime.prefix_cache_validate_every == 8
+    assert cfg.framework.runtime.prefix_cache_max_relative_rms == pytest.approx(0.05)
+    assert _as_config(None).framework.runtime.cache_mode == "recompute"
+
+
 def test_streaming_refresh_cadence_and_keeps_all_frames():
     model = object.__new__(MiniCPMGR00TResCore)
     torch.nn.Module.__init__(model)
@@ -96,7 +104,11 @@ def test_streaming_refresh_cadence_and_keeps_all_frames():
     assert refreshes == [0, 8, 16]
     assert len(model._history) == 17
     assert outputs[7]["plan_age"] == 7
+    assert outputs[7]["history_frame_count"] == 8
+    assert outputs[7]["plan_history_frame_count"] == 1
     assert outputs[8]["plan_age"] == 0
+    assert outputs[8]["history_frame_count"] == 9
+    assert outputs[8]["plan_history_frame_count"] == 9
     assert outputs[8]["refreshed"] is True
 
 
@@ -115,6 +127,77 @@ def test_streaming_rejects_episode_switch_without_reset():
     model.observe(image, 0, 0.0, "task", "episode-a")
     with pytest.raises(ValueError, match="reset_episode"):
         model.observe(image, 1, 0.1, "task", "episode-b")
+
+
+def test_reset_episode_discards_hybrid_cache_and_reenables_validation():
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    model.execution_horizon = 8
+    model._episode_id = "episode-a"
+    model._instruction = "task"
+    model._history = [HistoryFrame(Image.new("RGB", (8, 8)), "episode-a", 0, 0, "primary", 0)]
+    model._control_step = 0
+    model._cached_goal = {"some": "goal"}
+    model._cached_refresh_step = 0
+    model._prefix_cache = object()
+    model._prefix_cache_token_count = 100
+    model._prefix_cache_history_count = 1
+    model._prefix_cache_instruction = "task"
+    model._prefix_cache_refresh_count = 4
+    model._prefix_cache_validated = True
+    model._prefix_cache_disabled_reason = "stale"
+    model._prefix_cache_last_metrics = {"relative_rms": 0.01}
+
+    model.reset_episode("episode-b", "new task")
+
+    assert model._history == []
+    assert model._prefix_cache is None
+    assert model._prefix_cache_token_count == 0
+    assert model._prefix_cache_history_count == 0
+    assert model._prefix_cache_instruction is None
+    assert model._prefix_cache_refresh_count == 0
+    assert model._prefix_cache_validated is False
+    assert model._prefix_cache_disabled_reason is None
+    assert model._prefix_cache_last_metrics is None
+
+
+def test_prefix_cache_validation_returns_recompute_output_and_falls_back_when_error_is_large():
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    model._prefix_cache_refresh_count = 0
+    model.prefix_cache_validate_every = 8
+    model.prefix_cache_max_relative_rms = 0.05
+    model._prefix_cache_validated = False
+    model._prefix_cache_last_metrics = None
+    model._prefix_cache = object()
+    model._prefix_cache_disabled_reason = None
+
+    def cached_hidden(self):
+        return torch.tensor([1.01, 0.99])
+
+    def decode(self, hidden):
+        return {"predicted_residual": hidden}
+
+    def recompute(self):
+        return {"predicted_residual": torch.ones(2)}
+
+    model._cached_query_hidden = types.MethodType(cached_hidden, model)
+    model._decode_goal = types.MethodType(decode, model)
+    model._predict_goal_recompute = types.MethodType(recompute, model)
+    result = model._predict_goal_with_prefix_cache()
+    assert result["cache_mode"] == "prefix_validated"
+    assert result["cache_relative_rms_error"] == pytest.approx(0.01, abs=1e-5)
+    assert torch.equal(result["predicted_residual"], torch.ones(2))
+
+    model._prefix_cache_refresh_count = 0
+    model._prefix_cache_validated = False
+    model._prefix_cache = object()
+    model.prefix_cache_max_relative_rms = 0.05
+    model._cached_query_hidden = types.MethodType(lambda self: torch.tensor([1.2, 0.8]), model)
+    with pytest.warns(RuntimeWarning, match="falling back"):
+        result = model._predict_goal_with_prefix_cache()
+    assert result["cache_mode"] == "recompute_fallback"
+    assert model._prefix_cache_disabled_reason is not None
 
 
 def test_success_manifest_never_infers_final_episode_frame(tmp_path):

@@ -6,10 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import torch
 from omegaconf import OmegaConf
+from PIL import Image
 
 from starVLA.dataloader.minicpm_res_lerobot import MiniCPMResidualLeRobotDataset
 from starVLA.model.framework.VLM4A.MiniCPMGR00TRes import MiniCPMGR00TRes
@@ -39,6 +41,12 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--max-samples", type=int, default=16)
     parser.add_argument("--profile-history-lengths", default="1,8,32,all")
+    parser.add_argument(
+        "--mask-history-frame",
+        choices=("none", "oldest", "middle", "most_recent_previous"),
+        default="none",
+        help="Replace a selected past frame with a neutral gray frame while preserving its time/position.",
+    )
     parser.add_argument("--output", type=Path, default=Path("reswam_eval_profile.json"))
     args = parser.parse_args()
     cfg = _load_cfg(args.config)
@@ -59,6 +67,11 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
     model.load_reswam_checkpoint(args.checkpoint)
+    if (
+        args.mask_history_frame != "none"
+        and str(model.config.framework.residual_model.history_mode) != "full"
+    ):
+        raise ValueError("history-frame masking requires residual_model.history_mode='full'")
     torch.set_grad_enabled(False)
 
     requested = [part.strip() for part in args.profile_history_lengths.split(",") if part.strip()]
@@ -66,6 +79,7 @@ def main() -> None:
         "framework": "MiniCPMGR00TRes",
         "goal_target": "successful_terminal",
         "prediction_target": model.prediction_target,
+        "mask_history_frame": args.mask_history_frame,
         "execution_horizon": model.execution_horizon,
         "action_horizon": "owned by downstream action policy; not consumed here",
         "device": str(device),
@@ -79,6 +93,22 @@ def main() -> None:
         for index in range(min(args.max_samples, len(dataset))):
             sample = dataset[index]
             history, instruction, episode_id = model._history_from_example(sample)
+            masked_history_index = None
+            if args.mask_history_frame != "none":
+                if len(history) < 2:
+                    raise ValueError("history masking requires at least one past frame and one current frame")
+                if args.mask_history_frame == "oldest":
+                    masked_history_index = 0
+                elif args.mask_history_frame == "middle":
+                    masked_history_index = (len(history) - 1) // 2
+                else:
+                    masked_history_index = len(history) - 2
+                if masked_history_index == len(history) - 1:
+                    raise ValueError("the current frame cannot be selected for history masking")
+                neutral = Image.new("RGB", history[masked_history_index].image.size, (127, 127, 127))
+                history[masked_history_index] = replace(
+                    history[masked_history_index], image=neutral
+                )
             t0 = time.perf_counter()
             inputs = model.history_adapter.tokenize_history_query(
                 instruction,
@@ -123,6 +153,7 @@ def main() -> None:
                     "control_step": sample["control_step"],
                     "history_frames": len(history),
                     "context_tokens": context_tokens,
+                    "masked_history_index": masked_history_index,
                     "residual_mse": float(torch.mean((prediction.float() - target_residual.float()) ** 2)),
                     "zero_residual_mse": float(torch.mean(target_residual.float() ** 2)),
                     "preprocess_seconds": preprocess_seconds,

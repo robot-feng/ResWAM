@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -73,6 +75,8 @@ def _as_config(config: Any) -> DictConfig:
                 # any lower GR00T action_model.action_horizon.
                 "execution_horizon": 8,
                 "cache_mode": "recompute",
+                "prefix_cache_validate_every": 8,
+                "prefix_cache_max_relative_rms": 0.05,
             },
         }
     )
@@ -104,10 +108,19 @@ class MiniCPMGR00TResCore(baseframework):
         if str(self.config.framework.residual_model.goal_target) != "successful_terminal":
             raise ValueError("stage 1 supports only explicit successful_terminal targets")
         cache_mode = str(self.config.framework.runtime.cache_mode)
-        if cache_mode != "recompute":
-            raise ValueError("only cache_mode='recompute' is enabled until prefix equivalence is validated")
+        if cache_mode not in {"recompute", "prefix"}:
+            raise ValueError("runtime.cache_mode must be 'recompute' or 'prefix'")
+        if (
+            cache_mode == "prefix"
+            and str(self.config.framework.residual_model.history_mode) != "full"
+        ):
+            raise ValueError("cache_mode='prefix' requires residual_model.history_mode='full'")
         if int(self.config.framework.runtime.execution_horizon) < 1:
             raise ValueError("runtime.execution_horizon must be >= 1")
+        if int(self.config.framework.runtime.prefix_cache_validate_every) < 1:
+            raise ValueError("runtime.prefix_cache_validate_every must be >= 1")
+        if float(self.config.framework.runtime.prefix_cache_max_relative_rms) <= 0:
+            raise ValueError("runtime.prefix_cache_max_relative_rms must be > 0")
 
         self.qwen_vl_interface = get_vlm_model(config=self.config)
         self.processor = self.qwen_vl_interface.processor
@@ -149,6 +162,13 @@ class MiniCPMGR00TResCore(baseframework):
         self._freeze_micromamba_vision()
 
         self.execution_horizon = int(self.config.framework.runtime.execution_horizon)
+        self.cache_mode = cache_mode
+        self.prefix_cache_validate_every = int(
+            self.config.framework.runtime.prefix_cache_validate_every
+        )
+        self.prefix_cache_max_relative_rms = float(
+            self.config.framework.runtime.prefix_cache_max_relative_rms
+        )
         self.text_loss_weight = float(self.config.framework.residual_model.text_loss_weight)
         self.max_context_tokens = int(self.config.framework.residual_model.max_context_tokens)
         self.prediction_target = target
@@ -158,6 +178,14 @@ class MiniCPMGR00TResCore(baseframework):
         self._control_step = -1
         self._cached_goal: dict[str, Any] | None = None
         self._cached_refresh_step: int | None = None
+        self._prefix_cache = None
+        self._prefix_cache_token_count = 0
+        self._prefix_cache_history_count = 0
+        self._prefix_cache_instruction: str | None = None
+        self._prefix_cache_refresh_count = 0
+        self._prefix_cache_validated = False
+        self._prefix_cache_disabled_reason: str | None = None
+        self._prefix_cache_last_metrics: dict[str, float] | None = None
 
     def train(self, mode: bool = True):
         """Train the LM/head while keeping frozen visual teachers in eval mode."""
@@ -199,11 +227,17 @@ class MiniCPMGR00TResCore(baseframework):
             digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
         return digest.hexdigest()
 
-    def _encode_vlm(self, batch: dict[str, Any], use_cache: bool = False):
+    def _encode_vlm(
+        self,
+        batch: dict[str, Any],
+        use_cache: bool = False,
+        past_key_values: Any | None = None,
+    ):
         batch = batch.to(self._device()) if hasattr(batch, "to") else batch
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self._device().type == "cuda"):
             outputs = self.vlm_base(
                 **batch,
+                past_key_values=past_key_values,
                 output_hidden_states=False,
                 use_cache=use_cache,
                 return_dict=True,
@@ -369,6 +403,14 @@ class MiniCPMGR00TResCore(baseframework):
         self._control_step = -1
         self._cached_goal = None
         self._cached_refresh_step = None
+        self._prefix_cache = None
+        self._prefix_cache_token_count = 0
+        self._prefix_cache_history_count = 0
+        self._prefix_cache_instruction = None
+        self._prefix_cache_refresh_count = 0
+        self._prefix_cache_validated = False
+        self._prefix_cache_disabled_reason = None
+        self._prefix_cache_last_metrics = None
 
     def observe(
         self,
@@ -412,6 +454,9 @@ class MiniCPMGR00TResCore(baseframework):
             self._cached_refresh_step = step
         else:
             goal = dict(self._cached_goal)
+        goal["plan_history_frame_count"] = goal.get("history_frame_count", len(self._history))
+        goal["history_frame_count"] = len(self._history)
+        goal["plan_control_step"] = goal.get("control_step", self._control_step)
         goal["refreshed"] = bool(should_refresh)
         goal["plan_age"] = step - int(self._cached_refresh_step)
         goal["observed_control_step"] = step
@@ -422,6 +467,149 @@ class MiniCPMGR00TResCore(baseframework):
         """Predict the successful-terminal DINO residual from the full history."""
         if not self._history or self._episode_id is None or self._instruction is None:
             raise RuntimeError("reset_episode and observe at least one frame before predict_goal")
+        if self.cache_mode == "prefix" and self._prefix_cache_disabled_reason is None:
+            try:
+                return self._predict_goal_with_prefix_cache()
+            except Exception as exc:
+                # Cache implementations and model versions can differ. Preserve
+                # a correct inference path and make every fallback inspectable.
+                self._prefix_cache_disabled_reason = f"{type(exc).__name__}: {exc}"
+                self._prefix_cache = None
+                warnings.warn(
+                    "MiniCPM prefix cache failed; falling back to full-history recomputation: "
+                    + self._prefix_cache_disabled_reason,
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        result = self._predict_goal_recompute()
+        if self.cache_mode == "prefix":
+            result["cache_mode"] = "recompute_fallback"
+            result["cache_context_validated"] = False
+            result["cache_fallback_reason"] = self._prefix_cache_disabled_reason
+        else:
+            result["cache_mode"] = "recompute"
+        return result
+
+    def _token_count(self, inputs: dict[str, Any]) -> int:
+        ids = inputs["input_ids"]
+        mask = inputs.get("attention_mask")
+        return int(mask.sum().item()) if mask is not None else int(ids.shape[-1])
+
+    def _ensure_prefix_cache(self) -> None:
+        """Prefill once, then append every newly observed frame as one chunk."""
+        if self._prefix_cache is not None and self._prefix_cache_instruction != self._instruction:
+            self._prefix_cache = None
+            self._prefix_cache_token_count = 0
+            self._prefix_cache_history_count = 0
+            self._prefix_cache_refresh_count = 0
+            self._prefix_cache_validated = False
+            self._prefix_cache_last_metrics = None
+
+        if self._prefix_cache is None:
+            messages = self.history_adapter.history_messages(
+                self._instruction, self._episode_id, self._history, history_mode="full"
+            )
+            inputs = self.history_adapter.tokenize(
+                messages, self._history, device=self._device()
+            )
+            token_count = self._check_context_budget(inputs)
+            outputs = self._encode_vlm(inputs, use_cache=True)
+            cache = outputs.past_key_values
+            if cache is None:
+                raise RuntimeError("MiniCPM did not return a hybrid KV/linear-state cache")
+            if int(cache.get_seq_length()) != token_count:
+                raise RuntimeError(
+                    f"prefix cache length mismatch: expected {token_count}, got {cache.get_seq_length()}"
+                )
+            self._prefix_cache = cache
+            self._prefix_cache_token_count = token_count
+            self._prefix_cache_history_count = len(self._history)
+            self._prefix_cache_instruction = self._instruction
+            return
+
+        if self._prefix_cache_history_count > len(self._history):
+            raise RuntimeError("cached history is longer than the current episode history")
+        new_frames = self._history[self._prefix_cache_history_count :]
+        if not new_frames:
+            return
+
+        messages = [self.history_adapter.frame_message(frame) for frame in new_frames]
+        inputs = self.history_adapter.tokenize(messages, new_frames, device=self._device())
+        new_token_count = self._token_count(inputs)
+        if self._prefix_cache_token_count + new_token_count > self.max_context_tokens:
+            raise ValueError(
+                f"MiniCPM cached history needs {self._prefix_cache_token_count + new_token_count} tokens; "
+                f"configured budget is {self.max_context_tokens}. No frames were silently truncated."
+            )
+        past = copy.deepcopy(self._prefix_cache)
+        inputs = dict(inputs)
+        inputs["attention_mask"] = torch.ones(
+            (1, self._prefix_cache_token_count + inputs["input_ids"].shape[-1]),
+            dtype=torch.long,
+            device=self._device(),
+        )
+        # _encode_vlm accepts explicit past_key_values through the normal model
+        # kwargs; keep a candidate copy so a failed append cannot corrupt state.
+        outputs = self._encode_vlm(inputs, use_cache=True, past_key_values=past)
+        cache = outputs.past_key_values
+        expected_count = self._prefix_cache_token_count + new_token_count
+        if cache is None or int(cache.get_seq_length()) != expected_count:
+            actual = None if cache is None else cache.get_seq_length()
+            raise RuntimeError(f"appended prefix cache length mismatch: expected {expected_count}, got {actual}")
+        self._prefix_cache = cache
+        self._prefix_cache_token_count = expected_count
+        self._prefix_cache_history_count = len(self._history)
+
+    def _cached_query_hidden(self) -> torch.Tensor:
+        self._ensure_prefix_cache()
+        query = self.history_adapter.tokenize_query_block(device=self._device())
+        query_tokens = self._token_count(query)
+        if self._prefix_cache_token_count + query_tokens > self.max_context_tokens:
+            raise ValueError(
+                f"MiniCPM history plus residual query needs {self._prefix_cache_token_count + query_tokens} tokens; "
+                f"configured budget is {self.max_context_tokens}. No frames were silently truncated."
+            )
+        temporary_cache = copy.deepcopy(self._prefix_cache)
+        full_mask = torch.ones(
+            (1, self._prefix_cache_token_count + query["input_ids"].shape[-1]),
+            dtype=torch.long,
+            device=self._device(),
+        )
+        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self._device().type == "cuda"):
+            outputs = self.vlm_base(
+                input_ids=query["input_ids"],
+                attention_mask=full_mask,
+                past_key_values=temporary_cache,
+                output_hidden_states=False,
+                use_cache=True,
+                return_dict=True,
+            )
+        return gather_token_hidden_states(
+            outputs.last_hidden_state,
+            query["input_ids"],
+            token_id=self.residual_token_id,
+            expected_count=self.num_residual_tokens,
+            attention_mask=query.get("attention_mask"),
+        )
+
+    def _decode_goal(self, hidden: torch.Tensor) -> dict[str, Any]:
+        with torch.autocast("cuda", dtype=torch.float32, enabled=self._device().type == "cuda"):
+            predicted = self.residual_head(hidden.float())
+        reference = self.encode_dino(self._history[-1].image)
+        residual = predicted.float() if self.prediction_target == "residual" else predicted.float() - reference
+        return {
+            "predicted_residual": residual,
+            "reference_features": reference,
+            "predicted_goal_features": reference + residual,
+            "residual_token_hidden_states": hidden,
+            "reference_timestamp": float(self._history[-1].timestamp_seconds),
+            "plan_age": 0,
+            "history_frame_count": len(self._history),
+            "control_step": self._control_step,
+            "refreshed": True,
+        }
+
+    def _predict_goal_recompute(self) -> dict[str, Any]:
         inputs = self.history_adapter.tokenize_history_query(
             self._instruction,
             self._episode_id,
@@ -438,22 +626,65 @@ class MiniCPMGR00TResCore(baseframework):
             expected_count=self.num_residual_tokens,
             attention_mask=inputs.get("attention_mask"),
         )
-        with torch.autocast("cuda", dtype=torch.float32, enabled=self._device().type == "cuda"):
-            predicted = self.residual_head(hidden.float())
-        reference = self.encode_dino(self._history[-1].image)
-        residual = predicted.float() if self.prediction_target == "residual" else predicted.float() - reference
-        goal = reference + residual
-        return {
-            "predicted_residual": residual,
-            "reference_features": reference,
-            "predicted_goal_features": goal,
-            "residual_token_hidden_states": hidden,
-            "reference_timestamp": float(self._history[-1].timestamp_seconds),
-            "plan_age": 0,
-            "history_frame_count": len(self._history),
-            "control_step": self._control_step,
-            "refreshed": True,
+        return self._decode_goal(hidden)
+
+    def _predict_goal_with_prefix_cache(self) -> dict[str, Any]:
+        cached_hidden = self._cached_query_hidden()
+        cached = self._decode_goal(cached_hidden)
+        self._prefix_cache_refresh_count += 1
+        should_validate = (
+            not self._prefix_cache_validated
+            or (self._prefix_cache_refresh_count - 1) % self.prefix_cache_validate_every == 0
+        )
+        if not should_validate:
+            cached["cache_mode"] = "prefix"
+            cached["cache_validated"] = True
+            cached["cache_context_validated"] = False
+            cached["cache_relative_rms_error"] = (
+                None if self._prefix_cache_last_metrics is None else self._prefix_cache_last_metrics["relative_rms"]
+            )
+            return cached
+
+        recomputed = self._predict_goal_recompute()
+        reference = recomputed["predicted_residual"].float()
+        delta = cached["predicted_residual"].float() - reference
+        relative_rms = float(
+            delta.square().mean().sqrt() / reference.square().mean().sqrt().clamp_min(1e-8)
+        )
+        metrics = {
+            "relative_rms": relative_rms,
+            "mean_absolute": float(delta.abs().mean()),
+            "max_absolute": float(delta.abs().max()),
         }
+        self._prefix_cache_last_metrics = metrics
+        if relative_rms > self.prefix_cache_max_relative_rms:
+            self._prefix_cache_disabled_reason = (
+                f"prefix-vs-recompute residual relative RMS {relative_rms:.6f} exceeds "
+                f"configured limit {self.prefix_cache_max_relative_rms:.6f}"
+            )
+            self._prefix_cache = None
+            warnings.warn(
+                "MiniCPM prefix cache failed its residual-output comparison; "
+                "falling back to full-history recomputation: "
+                + self._prefix_cache_disabled_reason,
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            recomputed["cache_mode"] = "recompute_fallback"
+            recomputed["cache_validated"] = False
+            recomputed["cache_context_validated"] = False
+            recomputed["cache_fallback_reason"] = self._prefix_cache_disabled_reason
+            recomputed["cache_relative_rms_error"] = relative_rms
+            return recomputed
+
+        self._prefix_cache_validated = True
+        recomputed["cache_mode"] = "prefix_validated"
+        recomputed["cache_validated"] = True
+        recomputed["cache_context_validated"] = True
+        recomputed["cache_relative_rms_error"] = relative_rms
+        recomputed["cache_mean_absolute_error"] = metrics["mean_absolute"]
+        recomputed["cache_max_absolute_error"] = metrics["max_absolute"]
+        return recomputed
 
     def save_reswam_checkpoint(self, directory: str | Path) -> None:
         """Save trainable parameters plus strict base/token/teacher metadata."""
@@ -526,7 +757,11 @@ class MiniCPMGR00TResCore(baseframework):
         if set(state) != saved_names:
             raise ValueError("trainable_state.pt keys do not match the checkpoint manifest")
         own = self.state_dict()
-        for name, value in state.items():
-            if own[name].shape != value.shape:
-                raise ValueError(f"checkpoint shape mismatch for {name}: {tuple(value.shape)} vs {tuple(own[name].shape)}")
-            own[name].copy_(value.to(device=own[name].device, dtype=own[name].dtype))
+        with torch.no_grad():
+            for name, value in state.items():
+                if own[name].shape != value.shape:
+                    raise ValueError(
+                        f"checkpoint shape mismatch for {name}: "
+                        f"{tuple(value.shape)} vs {tuple(own[name].shape)}"
+                    )
+                own[name].copy_(value.to(device=own[name].device, dtype=own[name].dtype))

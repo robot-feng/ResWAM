@@ -28,6 +28,10 @@ framework:
   runtime:
     execution_horizon: 8
     cache_mode: recompute
+    # Opt in only for full history. Prefix mode verifies decoded residuals
+    # against full recomputation and falls back if relative RMS error > 0.05.
+    prefix_cache_validate_every: 8
+    prefix_cache_max_relative_rms: 0.05
 
 datasets:
   residual_data:

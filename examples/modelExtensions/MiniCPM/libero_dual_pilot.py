@@ -18,9 +18,12 @@ import argparse
 import base64
 import contextlib
 import copy
+import hashlib
+import importlib.metadata
 import json
 import os
 import pathlib
+import platform
 import socket
 import socketserver
 import subprocess
@@ -37,6 +40,7 @@ from PIL import Image
 from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
     ALIGNMENT_MODES,
     load_trace_activation_steps,
+    load_trace_max_control_step,
     source_step_at,
 )
 
@@ -48,6 +52,125 @@ LIBERO_ROOT = pathlib.Path("/home/taizun/lcy/FastWAM/third_party/LIBERO-plus")
 LIBERO_PYTHON = pathlib.Path("/data/miniconda3/envs/libero/bin/python")
 MODEL_IDS = ("MiniCPMGR00T", "MiniCPMGR00TDual", "MiniCPMGR00TDualAsy")
 TRAIN_FRAME_IDS = (1, 2, 9, 10)
+DATASET_ID = "libero_goal_no_noops_1.0.0_lerobot"
+
+
+def _sha256_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with pathlib.Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _canonical_json_hash(value):
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _sha256_bytes(encoded)
+
+
+def _git_provenance():
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        dirty = bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        )
+        return {"commit": commit, "dirty_worktree": dirty}
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "dirty_worktree": None}
+
+
+def _dataset_metadata_manifest(dataset_path):
+    dataset_path = pathlib.Path(dataset_path)
+    meta_path = dataset_path / "meta"
+    candidates = (
+        "info.json",
+        "episodes.jsonl",
+        "tasks.jsonl",
+        "modality.json",
+        "downsample.json",
+        "stats_gr00t.json",
+    )
+    files = {
+        name: _sha256_file(meta_path / name)
+        for name in candidates
+        if (meta_path / name).is_file()
+    }
+    return {
+        "dataset_path": str(dataset_path),
+        "metadata_file_sha256": files,
+        "manifest_sha256": _canonical_json_hash(files) if files else None,
+    }
+
+
+def _dependency_versions():
+    versions = {"python": platform.python_version(), "torch": torch.__version__}
+    for package in ("transformers", "torchvision", "timm", "modelscope", "omegaconf"):
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
+def _gpu_provenance():
+    if not torch.cuda.is_available():
+        return {"cuda_available": False, "devices": []}
+    return {
+        "cuda_available": True,
+        "cuda_runtime": torch.version.cuda,
+        "devices": [
+            {"index": index, "name": torch.cuda.get_device_name(index)}
+            for index in range(torch.cuda.device_count())
+        ],
+    }
+
+
+def _module_parameter_dtype(module):
+    try:
+        return str(next(module.parameters()).dtype)
+    except (AttributeError, StopIteration):
+        return None
+
+
+def _save_trainable_checkpoint(model, framework_name, output_dir, seed, config_sha256):
+    trainable_state = {
+        name: parameter.detach().cpu()
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    }
+    checkpoint_path = pathlib.Path(output_dir) / f"{framework_name}_trainable.pt"
+    torch.save(
+        {
+            "framework": framework_name,
+            "seed": int(seed),
+            "resolved_config_sha256": config_sha256,
+            "trainable_state_dict": trainable_state,
+        },
+        checkpoint_path,
+    )
+    return {
+        "path": str(checkpoint_path),
+        "sha256": _sha256_file(checkpoint_path),
+        "trainable_parameter_tensors": len(trainable_state),
+        "trainable_parameter_count": sum(tensor.numel() for tensor in trainable_state.values()),
+        "scope": "trainable parameters only; frozen base models are referenced in the resolved config",
+    }
 
 
 def _resolve_async_refresh_interval(models, requested_interval, async_config_path):
@@ -110,11 +233,7 @@ def _resolve_async_alignment(
     async_cfg = OmegaConf.load(async_config_path)
     framework_cfg = async_cfg.get("framework") or {}
     configured_alignment = framework_cfg.get("async_alignment") or {}
-    mode = (
-        requested_mode
-        or configured_alignment.get("mode")
-        or framework_cfg.get("alignment_mode")
-    )
+    mode = requested_mode or configured_alignment.get("mode")
     if mode is None:
         raise ValueError(
             "select --alignment-mode explicitly for MiniCPMGR00TDualAsy; "
@@ -126,8 +245,6 @@ def _resolve_async_alignment(
     fixed_latency = requested_latency_steps
     if fixed_latency is None:
         fixed_latency = configured_alignment.get("fixed_latency_steps")
-    if fixed_latency is None:
-        fixed_latency = framework_cfg.get("fixed_latency_steps")
     if mode == "fixed_step_delay":
         if fixed_latency is None or int(fixed_latency) < 0:
             raise ValueError(
@@ -144,7 +261,6 @@ def _resolve_async_alignment(
     trace_path = (
         requested_trace
         or configured_alignment.get("trace_path")
-        or framework_cfg.get("trace_path")
     )
     training_trace = requested_training_trace or trace_path
     if mode == "wall_clock":
@@ -175,12 +291,18 @@ def _resolve_async_alignment(
         if training_mode == "trace_replay" and trace_path
         else None
     )
+    runtime_trace_max_control_step = (
+        load_trace_max_control_step(runtime_trace_path)
+        if runtime_mode == "trace_replay"
+        else None
+    )
     return {
         "runtime_mode": runtime_mode,
         "training_mode": training_mode,
         "fixed_latency_steps": fixed_latency,
         "runtime_trace_path": runtime_trace_path,
         "training_trace_path": training_trace_path,
+        "runtime_trace_max_control_step": runtime_trace_max_control_step,
         "trace_activation_steps": trace_events,
     }
 
@@ -250,14 +372,20 @@ def _build_examples(
     frame_ids,
     vlm_refresh_interval,
     asynchronous,
-    alignment_mode="fixed_step_delay",
-    fixed_latency_steps=0,
+    alignment_mode=None,
+    fixed_latency_steps=None,
     trace_activation_steps=None,
 ):
     examples = []
     for frame_id in frame_ids:
         example = copy.deepcopy(dataset[frame_id])
         if asynchronous:
+            if alignment_mode is None:
+                raise ValueError("asynchronous training requires an explicit alignment_mode")
+            if alignment_mode == "fixed_step_delay" and fixed_latency_steps is None:
+                raise ValueError(
+                    "fixed_step_delay training requires explicit fixed_latency_steps"
+                )
             anchor_id = source_step_at(
                 frame_id,
                 mode=alignment_mode,
@@ -403,6 +531,8 @@ def _serve_and_simulate(model, framework_name, output_dir, instruction, max_step
             stats = model.async_stats()
             result = json.loads(result_path.read_text())
             result["async_stats"] = stats
+            result["activation_events"] = stats.get("vlm_activation_events", [])
+            result["refresh_events"] = stats.get("vlm_refresh_events", [])
             result_path.write_text(json.dumps(result, indent=2) + "\n")
         return json.loads(result_path.read_text())
     finally:
@@ -516,7 +646,7 @@ def main():
             vlm_refresh_interval,
             asynchronous=True,
             alignment_mode=training_alignment,
-            fixed_latency_steps=training_latency or 0,
+            fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
         )
         heldout = _build_examples(
@@ -525,7 +655,7 @@ def main():
             vlm_refresh_interval,
             asynchronous=True,
             alignment_mode=training_alignment,
-            fixed_latency_steps=training_latency or 0,
+            fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
         )[0]
 
@@ -539,6 +669,7 @@ def main():
         base_cfg.framework.async_alignment = {
             "mode": alignment["runtime_mode"],
             "fixed_latency_steps": alignment["fixed_latency_steps"],
+            "trace_max_control_step": alignment["runtime_trace_max_control_step"],
             "trace_path": (
                 str(pathlib.Path(alignment["runtime_trace_path"]).resolve())
                 if alignment["runtime_trace_path"]
@@ -564,8 +695,88 @@ def main():
     )
     print(f"[pilot] results={output_dir}")
 
+    dataset_path = args.data_root / DATASET_ID
+    dataset_metadata = _dataset_metadata_manifest(dataset_path)
+    (output_dir / "dataset_metadata_manifest.json").write_text(
+        json.dumps(dataset_metadata, indent=2) + "\n"
+    )
+    split_manifest = {
+        "schema_version": 1,
+        "scope": "single-trajectory engineering pilot; not a formal performance split",
+        "task": "put the bowl on the plate",
+        "train": [
+            {"episode_index": 0, "frame_index": int(frame)} for frame in selected
+        ],
+        "validation": [{"episode_index": 0, "frame_index": int(heldout_frame)}],
+        "test": [],
+    }
+    split_manifest["sha256"] = _canonical_json_hash(split_manifest)
+    (output_dir / "data_split_manifest.json").write_text(
+        json.dumps(split_manifest, indent=2) + "\n"
+    )
+
+    config_hashes = {
+        "training_config_path": str(args.config.resolve()),
+        "training_config_sha256": _sha256_file(args.config),
+        "async_config_path": str(args.async_config.resolve()) if run_async else None,
+        "async_config_sha256": _sha256_file(args.async_config) if run_async else None,
+        "training_alignment_trace_path": (
+            alignment["training_trace_path"] if alignment else None
+        ),
+        "training_alignment_trace_sha256": (
+            _sha256_file(alignment["training_trace_path"])
+            if alignment and alignment["training_trace_path"]
+            else None
+        ),
+    }
+    run_provenance = {
+        "created_at_local": time.strftime("%Y-%m-%d %H:%M:%S %z"),
+        "run_arguments": {
+            key: str(value) if isinstance(value, pathlib.Path) else value
+            for key, value in vars(args).items()
+        },
+        "git": _git_provenance(),
+        "configs": config_hashes,
+        "dataset_metadata_manifest": dataset_metadata,
+        "data_split_manifest_path": str(output_dir / "data_split_manifest.json"),
+        "data_split_manifest_sha256": split_manifest["sha256"],
+        "seed": int(args.seed),
+        "checkpoint_initialization": {
+            "vlm": str(base_cfg.framework.qwenvl.base_vlm),
+            "action_head": "initialized by framework constructor before pilot updates",
+            "saved_checkpoint_scope": "trainable parameters only",
+        },
+        "horizons": {
+            "action_prediction_H": action_chunk_length,
+            "execution_K": 1,
+            "vlm_refresh_M": vlm_refresh_interval,
+            "alignment_mode_runtime": alignment["runtime_mode"] if alignment else None,
+            "alignment_mode_training": alignment["training_mode"] if alignment else None,
+            "fixed_latency_L_steps": alignment["fixed_latency_steps"] if alignment else None,
+        },
+        "precision_policy": {
+            "vlm_forward_autocast": "bfloat16",
+            "action_model_forward_autocast": "float32",
+            "reduce_in_full_precision": bool(
+                base_cfg.framework.get("reduce_in_full_precision", False)
+            ),
+        },
+        "gpu": _gpu_provenance(),
+        "dependencies": _dependency_versions(),
+        "simulator": {
+            "python_path": str(LIBERO_PYTHON),
+            "repository_path": str(LIBERO_ROOT),
+            "skip_simulation": bool(args.skip_simulation),
+        },
+        "model_artifacts": {},
+    }
+    (output_dir / "run_provenance.json").write_text(
+        json.dumps(run_provenance, indent=2) + "\n"
+    )
+
     comparison = {
-        "dataset": str(args.data_root / "libero_goal_no_noops_1.0.0_lerobot"),
+        "dataset": str(dataset_path),
+        "provenance": run_provenance,
         "episode_index": 0,
         "task_instruction": "put the bowl on the plate",
         "episode_frames": frame_count,
@@ -595,6 +806,10 @@ def main():
         print(f"\n[pilot] ===== {framework_name} =====")
         cfg = copy.deepcopy(base_cfg)
         cfg.framework.name = framework_name
+        resolved_config_text = OmegaConf.to_yaml(cfg, resolve=True)
+        resolved_config_path = output_dir / f"{framework_name}_resolved_config.yaml"
+        resolved_config_path.write_text(resolved_config_text, encoding="utf-8")
+        resolved_config_sha256 = _sha256_bytes(resolved_config_text.encode("utf-8"))
         if framework_name == "MiniCPMGR00TDualAsy":
             examples = asy_examples
             eval_example = copy.deepcopy(heldout)
@@ -606,7 +821,28 @@ def main():
 
         model = _new_model(framework_name, cfg, args.seed, device)
         training = _run_training(model, framework_name, examples, eval_example, args.learning_rate)
-        record = {"training": training}
+        checkpoint = _save_trainable_checkpoint(
+            model,
+            framework_name,
+            output_dir,
+            args.seed,
+            resolved_config_sha256,
+        )
+        model_artifacts = {
+            "resolved_config_path": str(resolved_config_path),
+            "resolved_config_sha256": resolved_config_sha256,
+            "checkpoint": checkpoint,
+            "parameter_dtypes": {
+                "vlm": _module_parameter_dtype(getattr(model, "qwen_vl_interface", None)),
+                "dino": _module_parameter_dtype(getattr(model, "dino_encoder", None)),
+                "action_model": _module_parameter_dtype(getattr(model, "action_model", None)),
+            },
+        }
+        run_provenance["model_artifacts"][framework_name] = model_artifacts
+        (output_dir / "run_provenance.json").write_text(
+            json.dumps(run_provenance, indent=2) + "\n"
+        )
+        record = {"training": training, **model_artifacts}
         print(
             f"[pilot] train loss {training['train_losses'][0]['action_loss']:.6f} -> "
             f"{training['train_losses'][-1]['action_loss']:.6f}; "

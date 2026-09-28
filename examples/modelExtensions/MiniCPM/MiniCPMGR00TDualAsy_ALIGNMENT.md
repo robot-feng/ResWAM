@@ -81,9 +81,13 @@ python examples/modelExtensions/MiniCPM/libero_dual_pilot.py \
 ```
 
 The evaluator writes `H`, `K`, `M`, the selected alignment modes, per-step
-active source and state age, plus `activation_events` with source/request/ready/
-activation timestamps. A wall-clock trace can be passed back through
-`trace_replay` without replacing its variable delays with an assumed median.
+active source and semantic-state age, separate DINO/condition and action-head
+compute time, plus `refresh_events` and `activation_events` with source,
+request, ready, and activation step/timestamp fields. `run_provenance.json`,
+`data_split_manifest.json`, resolved model configs, and trainable-parameter
+checkpoints are saved with each pilot. A wall-clock trace can be passed back
+through `trace_replay` without replacing its variable delays with an assumed
+median.
 
 ## Current limits
 

@@ -28,6 +28,7 @@ from starVLA.model.framework.VLM4A.QwenDual import Qwen_Dual
 from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
     ALIGNMENT_MODES,
     load_trace_activation_steps,
+    load_trace_max_control_step,
     source_step_at,
 )
 from starVLA.model.tools import FRAMEWORK_REGISTRY
@@ -59,6 +60,7 @@ def _asy_config(config):
     cfg.framework.async_alignment.setdefault("mode", "wall_clock")
     cfg.framework.async_alignment.setdefault("fixed_latency_steps", None)
     cfg.framework.async_alignment.setdefault("trace_path", None)
+    cfg.framework.async_alignment.setdefault("trace_max_control_step", None)
     if cfg.framework.get("vlm_refresh_interval") is None:
         cfg.framework.vlm_refresh_interval = 8
     action_defaults = {
@@ -123,6 +125,8 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 "with fixed_step_delay"
             )
         trace_path = alignment_cfg.get("trace_path")
+        trace_max = alignment_cfg.get("trace_max_control_step")
+        self.trace_max_control_step = None if trace_max is None else int(trace_max)
         self.trace_activation_steps = None
         if self.async_alignment_mode == "trace_replay":
             if not trace_path:
@@ -130,6 +134,10 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                     "trace_replay requires framework.async_alignment.trace_path"
                 )
             self.trace_activation_steps = load_trace_activation_steps(trace_path)
+            if self.trace_max_control_step is None:
+                self.trace_max_control_step = load_trace_max_control_step(trace_path)
+            if self.trace_max_control_step < 0:
+                raise ValueError("trace replay control-step horizon must be nonnegative")
             invalid_sources = [
                 source
                 for source in self.trace_activation_steps
@@ -143,11 +151,15 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
 
         self._async_generation = 0
         self._control_step = 0
+        self._control_step_origin = None
+        self._runtime_lock = threading.RLock()
         self._cached_vlm_hidden = None
         self._cached_instruction = None
         self._cached_vlm_step = None
         self._cached_ready_timestamp = None
         self._completed_snapshots = {}
+        self._refresh_events = []
+        self._refresh_events_by_key = {}
         self._activation_events = []
         self._request_queue: queue.Queue = queue.Queue()
         self._result_queue: queue.Queue = queue.Queue()
@@ -160,6 +172,11 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             "dino_calls": 0,
             "action_calls": 0,
             "vlm_seconds": [],
+            "last_control_step": None,
+            "last_control_timestamp": None,
+            "last_condition_compute_seconds": None,
+            "last_action_compute_seconds": None,
+            "last_policy_compute_seconds": None,
         }
 
     def _encode_vlm(self, vlm_images, instructions):
@@ -199,9 +216,19 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             try:
                 if request is None:
                     return
-                generation, control_step, images, instructions, request_timestamp = request
-                if generation != self._async_generation:
-                    self._stats["vlm_dropped_stale"] += 1
+                (
+                    generation,
+                    control_step,
+                    images,
+                    instructions,
+                    source_timestamp,
+                    request_timestamp,
+                ) = request
+                with self._runtime_lock:
+                    request_is_stale = generation != self._async_generation
+                    if request_is_stale:
+                        self._stats["vlm_dropped_stale"] += 1
+                if request_is_stale:
                     continue
                 started = time.perf_counter()
                 with torch.inference_mode():
@@ -215,6 +242,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 result = {
                     "generation": generation,
                     "source_step": control_step,
+                    "source_timestamp": source_timestamp,
                     "instructions": instructions,
                     "hidden": hidden,
                     "compute_seconds": ready_timestamp - started,
@@ -227,6 +255,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 result = {
                     "generation": generation,
                     "source_step": control_step,
+                    "source_timestamp": source_timestamp,
                     "instructions": instructions,
                     "hidden": None,
                     "compute_seconds": ready_timestamp - started,
@@ -238,49 +267,73 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 self._request_queue.task_done()
             self._result_queue.put(result)
 
-    def _record_activation(self, item, activation_timestamp, activation_step=None):
+    def _new_refresh_event(self, source_step, source_timestamp, request_timestamp):
+        event = {
+            "generation": self._async_generation,
+            "source_step": int(source_step),
+            "request_step": int(source_step),
+            "ready_step": None,
+            "activation_step": None,
+            "source_timestamp": float(source_timestamp),
+            "request_timestamp": float(request_timestamp),
+            "ready_timestamp": None,
+            "activation_timestamp": None,
+            "compute_seconds": None,
+            "alignment_mode": self.async_alignment_mode,
+        }
+        self._refresh_events.append(event)
+        self._refresh_events_by_key[(self._async_generation, int(source_step))] = event
+        return event
+
+    def _record_activation(
+        self, item, activation_timestamp, activation_step=None, ready_step=None
+    ):
         self._cached_vlm_step = int(item["source_step"])
         self._cached_instruction = item["instructions"]
         self._cached_vlm_hidden = item["hidden"]
         self._cached_ready_timestamp = float(item["ready_timestamp"])
-        self._activation_events.append(
-            {
-                "generation": self._async_generation,
-                "source_step": int(item["source_step"]),
-                "request_step": int(item["source_step"]),
-                "activation_step": (
-                    max(0, self._control_step - 1)
-                    if activation_step is None
-                    else int(activation_step)
-                ),
-                "request_timestamp": float(item["request_timestamp"]),
-                "ready_timestamp": float(item["ready_timestamp"]),
-                "activation_timestamp": float(activation_timestamp),
-                "compute_seconds": float(item["compute_seconds"]),
-                "alignment_mode": self.async_alignment_mode,
-            }
+        key = (self._async_generation, int(item["source_step"]))
+        event = self._refresh_events_by_key.get(key)
+        if event is None:
+            event = self._new_refresh_event(
+                item["source_step"],
+                item.get("source_timestamp", item["request_timestamp"]),
+                item["request_timestamp"],
+            )
+        event["ready_step"] = item.get("ready_step", ready_step)
+        event["ready_timestamp"] = float(item["ready_timestamp"])
+        event["compute_seconds"] = float(item["compute_seconds"])
+        event["activation_step"] = (
+            max(0, self._control_step - 1)
+            if activation_step is None
+            else int(activation_step)
         )
+        event["activation_timestamp"] = float(activation_timestamp)
+        self._activation_events.append(dict(event))
 
-    def _poll_vlm_results(self, activation_step=None):
-        latest = None
+    def _poll_vlm_results(self, control_step=None):
         while True:
             try:
                 item = self._result_queue.get_nowait()
             except queue.Empty:
                 break
-            source_step = self._accept_vlm_result(item)
-            if source_step is not None and (latest is None or source_step >= latest[0]):
-                latest = (source_step, item)
+            self._accept_vlm_result(item, ready_control_step=control_step)
         if (
-            latest is not None
-            and self.async_alignment_mode == "wall_clock"
-            and activation_step is not None
+            self.async_alignment_mode == "wall_clock"
+            and control_step is not None
+            and self._completed_snapshots
         ):
-            self._record_activation(
-                latest[1], time.perf_counter(), activation_step=activation_step
-            )
+            latest_source = max(self._completed_snapshots)
+            if self._cached_vlm_step != latest_source:
+                latest = self._completed_snapshots[latest_source]
+                self._record_activation(
+                    latest,
+                    time.perf_counter(),
+                    activation_step=control_step,
+                    ready_step=latest.get("ready_step"),
+                )
 
-    def _accept_vlm_result(self, item):
+    def _accept_vlm_result(self, item, ready_control_step=None):
         generation = item["generation"]
         step = int(item["source_step"])
         if generation != self._async_generation:
@@ -290,26 +343,49 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             raise RuntimeError(f"Asynchronous VLM refresh failed at control step {step}") from item["error"]
         self._stats["vlm_completed"] += 1
         self._stats["vlm_seconds"].append(float(item["compute_seconds"]))
+        # If a result is only drained after the rollout, the first control
+        # index after the last delivered action is the observed ready boundary.
+        if ready_control_step is None:
+            ready_control_step = self._control_step
+        item["ready_step"] = int(ready_control_step)
+        event = self._refresh_events_by_key.get((generation, step))
+        if event is not None:
+            event["ready_step"] = item["ready_step"]
+            event["ready_timestamp"] = float(item["ready_timestamp"])
+            event["compute_seconds"] = float(item["compute_seconds"])
         self._completed_snapshots[step] = item
         return step
 
-    def _submit_vlm_refresh(self, images, instructions, control_step):
+    def _submit_vlm_refresh(
+        self, images, instructions, control_step, source_timestamp=None
+    ):
         # Clone the list containers so callers cannot mutate the queued snapshot.
         self._ensure_worker()
+        source_timestamp = (
+            time.perf_counter() if source_timestamp is None else float(source_timestamp)
+        )
         request_timestamp = time.perf_counter()
+        self._new_refresh_event(control_step, source_timestamp, request_timestamp)
         self._request_queue.put(
             (
                 self._async_generation,
                 int(control_step),
                 copy.deepcopy(images),
                 tuple(instructions),
+                source_timestamp,
                 request_timestamp,
             )
         )
         self._stats["vlm_submitted"] += 1
 
-    def _run_synchronous_refresh(self, images, instructions, control_step):
+    def _run_synchronous_refresh(
+        self, images, instructions, control_step, source_timestamp=None
+    ):
+        source_timestamp = (
+            time.perf_counter() if source_timestamp is None else float(source_timestamp)
+        )
         request_timestamp = time.perf_counter()
+        event = self._new_refresh_event(control_step, source_timestamp, request_timestamp)
         self._stats["vlm_submitted"] += 1
         with torch.inference_mode():
             hidden = self._encode_vlm(images, instructions)
@@ -320,14 +396,17 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         self._record_activation(
             {
                 "source_step": int(control_step),
+                "source_timestamp": source_timestamp,
                 "instructions": tuple(instructions),
                 "hidden": hidden,
                 "request_timestamp": request_timestamp,
                 "ready_timestamp": ready_timestamp,
                 "compute_seconds": elapsed,
+                "ready_step": int(control_step),
             },
             ready_timestamp,
             activation_step=control_step,
+            ready_step=control_step,
         )
 
     def _scheduled_source_step(self, control_step):
@@ -350,7 +429,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
     def _wait_for_scheduled_source(self, source_step, activation_step, timeout=120.0):
         deadline = time.monotonic() + timeout
         while source_step not in self._completed_snapshots:
-            self._poll_vlm_results()
+            self._poll_vlm_results(control_step=activation_step)
             if source_step in self._completed_snapshots:
                 break
             remaining = deadline - time.monotonic()
@@ -362,29 +441,34 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 item = self._result_queue.get(timeout=min(remaining, 0.1))
             except queue.Empty:
                 continue
-            self._accept_vlm_result(item)
+            self._accept_vlm_result(item, ready_control_step=activation_step)
         if self._cached_vlm_step != source_step:
             self._record_activation(
                 self._completed_snapshots[source_step],
                 time.perf_counter(),
                 activation_step=activation_step,
+                ready_step=self._completed_snapshots[source_step].get("ready_step"),
             )
 
     def reset_async_cache(self):
         """Start a new episode and invalidate pending outputs from the old one."""
-        self._async_generation += 1
-        self._control_step = 0
-        self._cached_vlm_hidden = None
-        self._cached_instruction = None
-        self._cached_vlm_step = None
-        self._cached_ready_timestamp = None
-        self._completed_snapshots.clear()
-        self._activation_events.clear()
-        while True:
-            try:
-                self._result_queue.get_nowait()
-            except queue.Empty:
-                break
+        with self._runtime_lock:
+            self._async_generation += 1
+            self._control_step = 0
+            self._control_step_origin = None
+            self._cached_vlm_hidden = None
+            self._cached_instruction = None
+            self._cached_vlm_step = None
+            self._cached_ready_timestamp = None
+            self._completed_snapshots.clear()
+            self._refresh_events.clear()
+            self._refresh_events_by_key.clear()
+            self._activation_events.clear()
+            while True:
+                try:
+                    self._result_queue.get_nowait()
+                except queue.Empty:
+                    break
 
     def close_async_worker(self, timeout: float = 30.0):
         """Stop the background worker cleanly after evaluation."""
@@ -394,14 +478,16 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         self._worker.join(timeout=timeout)
         if self._worker.is_alive():
             raise TimeoutError("MiniCPM VLM refresh worker did not stop in time")
-        self._poll_vlm_results()
+        with self._runtime_lock:
+            self._poll_vlm_results()
         self._worker = None
 
     def wait_for_async_refreshes(self, timeout: float = 30.0):
         """Wait for submitted refreshes and surface completed worker errors."""
         deadline = time.monotonic() + timeout
         while True:
-            self._poll_vlm_results()
+            with self._runtime_lock:
+                self._poll_vlm_results()
             with self._request_queue.all_tasks_done:
                 pending = self._request_queue.unfinished_tasks
             if pending == 0:
@@ -411,25 +497,45 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                     f"Timed out with {pending} asynchronous VLM refreshes pending"
                 )
             time.sleep(0.01)
-        self._poll_vlm_results()
+        with self._runtime_lock:
+            self._poll_vlm_results()
 
     def async_stats(self):
-        result = {k: v for k, v in self._stats.items() if k != "vlm_seconds"}
-        durations = self._stats["vlm_seconds"]
-        result["vlm_mean_seconds"] = float(np.mean(durations)) if durations else 0.0
-        result["latest_vlm_step"] = self._cached_vlm_step
-        result["alignment_mode"] = self.async_alignment_mode
-        result["vlm_activation_events"] = list(self._activation_events)
-        result["latest_vlm_activation_event"] = (
-            dict(self._activation_events[-1]) if self._activation_events else None
-        )
-        result["vlm_age_steps"] = (
-            max(0, self._control_step - 1 - self._cached_vlm_step)
-            if self._cached_vlm_step is not None
-            else None
-        )
-        result["queued_refreshes"] = self._request_queue.qsize()
-        return result
+        with self._runtime_lock:
+            result = {k: v for k, v in self._stats.items() if k != "vlm_seconds"}
+            durations = self._stats["vlm_seconds"]
+            result["vlm_mean_seconds"] = float(np.mean(durations)) if durations else 0.0
+            result["latest_vlm_step"] = self._cached_vlm_step
+            result["alignment_mode"] = self.async_alignment_mode
+            result["vlm_refresh_events"] = copy.deepcopy(self._refresh_events)
+            result["vlm_activation_events"] = copy.deepcopy(self._activation_events)
+            result["latest_vlm_activation_event"] = (
+                dict(self._activation_events[-1]) if self._activation_events else None
+            )
+            result["vlm_age_steps"] = (
+                max(0, self._control_step - 1 - self._cached_vlm_step)
+                if self._cached_vlm_step is not None
+                else None
+            )
+            result["queued_refreshes"] = self._request_queue.qsize()
+            return result
+
+    def _resolve_control_step(self, control_step):
+        """Map caller step numbers into the current episode/instruction epoch."""
+        if control_step is None:
+            if self._control_step_origin is None:
+                self._control_step_origin = 0
+            return self._control_step
+        external_step = int(control_step)
+        if external_step < 0:
+            raise ValueError("control_step must be nonnegative")
+        if self._control_step_origin is None:
+            self._control_step_origin = external_step
+        if external_step < self._control_step_origin:
+            raise ValueError(
+                "control_step moved backwards without reset_async_cache()"
+            )
+        return external_step - self._control_step_origin
 
     def _condition_from_vlm_hidden(self, batch_images, wrist_views, state, vlm_hidden):
         if wrist_views is None:
@@ -483,6 +589,10 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
 
     @torch.inference_mode()
     def predict_action(self, examples=None, control_step: Optional[int] = None, **kwargs):
+        with self._runtime_lock:
+            return self._predict_action_impl(examples, control_step, **kwargs)
+
+    def _predict_action_impl(self, examples=None, control_step: Optional[int] = None, **kwargs):
         if examples is None:
             raise ValueError("MiniCPMGR00TDualAsy.predict_action requires examples")
         if not isinstance(examples, list):
@@ -490,25 +600,35 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         if len(examples) != 1:
             raise ValueError("Stateful DualAsy inference currently requires batch size 1")
 
+        source_timestamp = time.perf_counter()
         batch_images, wrist_views, instructions, state = self.align_model_input(examples)
         instruction_key = tuple(instructions)
         if self._cached_instruction is not None and self._cached_instruction != instruction_key:
             self.reset_async_cache()
 
-        step = self._control_step if control_step is None else int(control_step)
+        step = self._resolve_control_step(control_step)
+        if (
+            self.async_alignment_mode == "trace_replay"
+            and self.trace_max_control_step is not None
+            and step > self.trace_max_control_step
+        ):
+            raise ValueError(
+                f"trace_replay ends at control step {self.trace_max_control_step}, "
+                f"received step {step}"
+            )
         self._control_step = max(self._control_step, step + 1)
         refresh_due = self._cached_vlm_hidden is None or step % self.vlm_update_interval == 0
         if refresh_due:
             if self.async_alignment_mode == "synchronous":
-                self._run_synchronous_refresh(batch_images, instructions, step)
+                self._run_synchronous_refresh(
+                    batch_images, instructions, step, source_timestamp=source_timestamp
+                )
             else:
-                if self.async_alignment_mode == "trace_replay" and step not in self.trace_activation_steps:
-                    raise ValueError(
-                        f"trace_replay has no activation event for requested source step {step}"
-                    )
-                self._submit_vlm_refresh(batch_images, instructions, step)
+                self._submit_vlm_refresh(
+                    batch_images, instructions, step, source_timestamp=source_timestamp
+                )
 
-        self._poll_vlm_results(activation_step=step)
+        self._poll_vlm_results(control_step=step)
         if self.async_alignment_mode in ("fixed_step_delay", "trace_replay"):
             scheduled_source = self._scheduled_source_step(step)
             self._wait_for_scheduled_source(scheduled_source, activation_step=step)
@@ -525,16 +645,55 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 except queue.Empty:
                     continue
                 else:
-                    self._accept_vlm_result(item)
-                    if self.async_alignment_mode == "wall_clock":
+                    source = self._accept_vlm_result(item, ready_control_step=step)
+                    if self.async_alignment_mode == "wall_clock" and source is not None:
                         self._record_activation(
-                            item, time.perf_counter(), activation_step=step
+                            item,
+                            time.perf_counter(),
+                            activation_step=step,
+                            ready_step=item.get("ready_step"),
                         )
 
-        condition, state = self._condition_from_vlm_hidden(batch_images, wrist_views, state, self._cached_vlm_hidden)
+        policy_started = time.perf_counter()
+        use_cuda_timing = (
+            torch.cuda.is_available()
+            and isinstance(self._cached_vlm_hidden, torch.Tensor)
+            and self._cached_vlm_hidden.is_cuda
+        )
+        if use_cuda_timing:
+            timing_stream = torch.cuda.current_stream(self._cached_vlm_hidden.device)
+            condition_start_event = torch.cuda.Event(enable_timing=True)
+            condition_end_event = torch.cuda.Event(enable_timing=True)
+            action_start_event = torch.cuda.Event(enable_timing=True)
+            action_end_event = torch.cuda.Event(enable_timing=True)
+            condition_start_event.record(timing_stream)
+        condition_started = time.perf_counter()
+        condition, state = self._condition_from_vlm_hidden(
+            batch_images, wrist_views, state, self._cached_vlm_hidden
+        )
+        if use_cuda_timing:
+            condition_end_event.record(timing_stream)
+            action_start_event.record(timing_stream)
+        else:
+            condition_seconds = time.perf_counter() - condition_started
+        action_started = time.perf_counter()
         with torch.autocast("cuda", dtype=torch.float32, enabled=torch.cuda.is_available()):
             actions = self.action_model.predict_action(condition, state)
+        if use_cuda_timing:
+            action_end_event.record(timing_stream)
+            # Synchronize only the Fast-loop stream. A device-wide synchronize
+            # would wait for the independent Slow VLM worker stream as well.
+            action_end_event.synchronize()
+            condition_seconds = condition_start_event.elapsed_time(condition_end_event) / 1000.0
+            action_seconds = action_start_event.elapsed_time(action_end_event) / 1000.0
+        else:
+            action_seconds = time.perf_counter() - action_started
         self._stats["action_calls"] += 1
+        self._stats["last_control_step"] = step
+        self._stats["last_control_timestamp"] = source_timestamp
+        self._stats["last_condition_compute_seconds"] = condition_seconds
+        self._stats["last_action_compute_seconds"] = action_seconds
+        self._stats["last_policy_compute_seconds"] = time.perf_counter() - policy_started
         return {
             "normalized_actions": actions.detach().cpu().numpy(),
             "async_stats": self.async_stats(),

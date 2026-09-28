@@ -16,6 +16,24 @@ from typing import Any
 ALIGNMENT_MODES = ("synchronous", "fixed_step_delay", "trace_replay", "wall_clock")
 
 
+def _normalize_activation_steps(events: dict[int, int]) -> dict[int, int]:
+    normalized = {int(source): int(activation) for source, activation in events.items()}
+    if normalized.get(0) != 0:
+        raise ValueError("trace_replay must include the synchronous bootstrap event 0 -> 0")
+    previous_activation = -1
+    for source, activation in sorted(normalized.items()):
+        if source < 0 or activation < source:
+            raise ValueError(
+                "trace source and activation steps must be nonnegative and activation >= source"
+            )
+        if activation < previous_activation:
+            raise ValueError(
+                "trace activation steps must be monotonic with their source steps"
+            )
+        previous_activation = activation
+    return normalized
+
+
 def fixed_activation_steps(
     refresh_interval: int,
     latency_steps: int,
@@ -81,9 +99,7 @@ def source_step_at(
     if mode == "trace_replay":
         if not trace_activation_steps:
             raise ValueError("trace_replay requires source_step -> activation_step events")
-        events = {int(source): int(activation) for source, activation in trace_activation_steps.items()}
-        if events.get(0) != 0:
-            raise ValueError("trace_replay must include the synchronous bootstrap event 0 -> 0")
+        events = _normalize_activation_steps(trace_activation_steps)
     else:
         latency = 0 if mode == "synchronous" else fixed_latency_steps
         if latency is None:
@@ -99,10 +115,10 @@ def source_step_at(
 def _find_step_trace(value: Any) -> list[dict[str, Any]] | None:
     if isinstance(value, dict):
         trace = value.get("async_step_trace")
-        if isinstance(trace, list) and all(isinstance(row, dict) for row in trace):
+        if trace and isinstance(trace, list) and all(isinstance(row, dict) for row in trace):
             return trace
         events = value.get("activation_events")
-        if isinstance(events, list) and all(isinstance(row, dict) for row in events):
+        if events and isinstance(events, list) and all(isinstance(row, dict) for row in events):
             return events
         for child in value.values():
             found = _find_step_trace(child)
@@ -144,11 +160,46 @@ def load_trace_activation_steps(path: str | Path) -> dict[int, int]:
             activation_steps.setdefault(source, int(row["control_step"]))
             previous_source = source
 
-    if activation_steps.get(0) != 0:
-        raise ValueError("alignment trace must include the step-0 bootstrap activation")
-    if any(source < 0 or activation < source for source, activation in activation_steps.items()):
-        raise ValueError("trace source and activation steps must be nonnegative and activation >= source")
-    return dict(sorted(activation_steps.items()))
+    return dict(sorted(_normalize_activation_steps(activation_steps).items()))
+
+
+def load_trace_max_control_step(path: str | Path) -> int:
+    """Return the last control step covered by an evaluator trace."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"alignment trace does not exist: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = _find_step_trace(payload)
+    if rows:
+        if any("control_step" in row for row in rows):
+            return max(int(row["control_step"]) for row in rows if "control_step" in row)
+        if any("activation_step" in row for row in rows):
+            return max(
+                int(row["activation_step"])
+                for row in rows
+                if row.get("activation_step") is not None
+            )
+
+    def find_max(value: Any) -> int | None:
+        if isinstance(value, dict):
+            max_steps = value.get("max_control_steps")
+            if max_steps is not None:
+                return max(0, int(max_steps) - 1)
+            for child in value.values():
+                found = find_max(child)
+                if found is not None:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = find_max(child)
+                if found is not None:
+                    return found
+        return None
+
+    max_control_step = find_max(payload)
+    if max_control_step is None:
+        raise ValueError(f"no control-step coverage found in alignment trace {path}")
+    return max_control_step
 
 
 def observed_activation_steps(rows: list[dict[str, Any]]) -> dict[int, int]:

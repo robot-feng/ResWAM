@@ -188,14 +188,34 @@ def main():
             if final_server_stats is not None:
                 async_step_trace.append(
                     {
-                        "control_step": control_step,
+                        "control_step": final_server_stats.get(
+                            "last_control_step", control_step
+                        ),
+                        "environment_control_step": control_step,
                         "cached_vlm_step": final_server_stats.get("latest_vlm_step"),
                         "vlm_age_steps": final_server_stats.get("vlm_age_steps"),
+                        "semantic_state_age_steps": final_server_stats.get("vlm_age_steps"),
+                        "action_control_step": final_server_stats.get("last_control_step"),
+                        "action_control_timestamp": final_server_stats.get(
+                            "last_control_timestamp"
+                        ),
+                        "condition_compute_seconds": final_server_stats.get(
+                            "last_condition_compute_seconds"
+                        ),
+                        "action_compute_seconds": final_server_stats.get(
+                            "last_action_compute_seconds"
+                        ),
+                        "policy_compute_seconds": final_server_stats.get(
+                            "last_policy_compute_seconds"
+                        ),
                         "vlm_submitted": final_server_stats.get("vlm_submitted"),
                         "vlm_completed": final_server_stats.get("vlm_completed"),
                         "queued_refreshes": final_server_stats.get("queued_refreshes"),
                         "latest_vlm_activation_event": final_server_stats.get(
                             "latest_vlm_activation_event"
+                        ),
+                        "latest_vlm_refresh_event": (
+                            (final_server_stats.get("vlm_refresh_events") or [None])[-1]
                         ),
                         "policy_roundtrip_seconds": step_latencies[-1],
                     }
@@ -222,6 +242,11 @@ def main():
         "async_step_trace": async_step_trace,
         "activation_events": (
             final_server_stats.get("vlm_activation_events", [])
+            if final_server_stats is not None
+            else []
+        ),
+        "refresh_events": (
+            final_server_stats.get("vlm_refresh_events", [])
             if final_server_stats is not None
             else []
         ),

@@ -18,6 +18,7 @@ from examples.modelExtensions.MiniCPM.libero_dual_pilot import (
     _latest_completed_vlm_anchor_step,
     _resolve_async_alignment,
     _resolve_async_refresh_interval,
+    _save_trainable_checkpoint,
 )
 
 
@@ -58,7 +59,7 @@ def test_stage1_pilot_does_not_load_async_config(tmp_path):
 def test_async_pilot_refresh_setting_is_explicit_and_validated(tmp_path):
     async_config = tmp_path / "async.yaml"
     async_config.write_text(
-        "framework:\n  vlm_refresh_interval: 6\n  alignment_mode: fixed_step_delay\n  fixed_latency_steps: 3\n",
+        "framework:\n  vlm_refresh_interval: 6\n  async_alignment:\n    mode: fixed_step_delay\n    fixed_latency_steps: 3\n",
         encoding="utf-8",
     )
     models = ["MiniCPMGR00TDual", "MiniCPMGR00TDualAsy"]
@@ -103,6 +104,25 @@ def test_wall_clock_training_alignment_requires_and_replays_an_observed_trace(tm
     assert resolved["runtime_mode"] == "wall_clock"
     assert resolved["training_mode"] == "trace_replay"
     assert resolved["trace_activation_steps"] == {0: 0, 8: 11}
+    assert resolved["runtime_trace_max_control_step"] is None
+
+
+def test_trace_replay_runtime_carries_trace_horizon(tmp_path):
+    async_config = tmp_path / "async.yaml"
+    async_config.write_text(
+        "framework:\n  vlm_refresh_interval: 8\n", encoding="utf-8"
+    )
+    trace = tmp_path / "trace.json"
+    trace.write_text(
+        '{"async_step_trace": [{"control_step": 0, "cached_vlm_step": 0}, '
+        '{"control_step": 11, "cached_vlm_step": 8}]}',
+        encoding="utf-8",
+    )
+    resolved = _resolve_async_alignment(
+        ["MiniCPMGR00TDualAsy"], "trace_replay", None, trace, None, async_config
+    )
+    assert resolved["runtime_trace_max_control_step"] == 11
+    assert resolved["trace_activation_steps"] == {0: 0, 8: 11}
 
 
 def test_async_training_anchor_tracks_latest_completed_refresh():
@@ -128,6 +148,31 @@ def test_async_training_anchor_tracks_latest_completed_refresh():
     assert [example["vlm_image"] for example in examples] == [
         dataset[anchor]["image"] for anchor in (0, 0, 0, 0, 8, 16)
     ]
+    with pytest.raises(ValueError, match="explicit alignment_mode"):
+        _build_examples(dataset, [9], 8, True)
+
+
+def test_synchronous_training_alignment_uses_current_periodic_refresh():
+    dataset = [{"image": [step], "action": step} for step in range(24)]
+    examples = _build_examples(
+        dataset, [1, 8, 9, 16], 8, True, alignment_mode="synchronous"
+    )
+    assert [example["vlm_anchor_frame"] for example in examples] == [0, 8, 8, 16]
+
+
+def test_pilot_saves_only_trainable_parameters_with_a_checksum(tmp_path):
+    module = torch.nn.Linear(3, 2)
+    module.bias.requires_grad_(False)
+
+    checkpoint = _save_trainable_checkpoint(
+        module, "test_policy", tmp_path, seed=7, config_sha256="cfg-hash"
+    )
+
+    payload = torch.load(checkpoint["path"], map_location="cpu", weights_only=False)
+    assert set(payload["trainable_state_dict"]) == {"weight"}
+    assert checkpoint["trainable_parameter_tensors"] == 1
+    assert checkpoint["trainable_parameter_count"] == 6
+    assert len(checkpoint["sha256"]) == 64
 
 
 def test_minicpm_gr00t_dual_builds_joint_vlm_dino_condition(monkeypatch):

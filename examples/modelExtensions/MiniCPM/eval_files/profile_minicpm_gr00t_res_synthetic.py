@@ -120,7 +120,7 @@ def main() -> None:
                     (31 + (index * 17) % 190, 47 + (index * 29) % 180, 83 + (index * 11) % 160),
                 ),
                 episode_id="synthetic-profile",
-                control_step=index * model.execution_horizon,
+                control_step=index * model.vlm_refresh_interval,
                 timestamp_seconds=index / model.history_adapter.fps,
                 view_id="primary",
                 frame_order=index,

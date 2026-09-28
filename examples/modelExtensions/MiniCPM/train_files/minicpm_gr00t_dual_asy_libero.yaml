@@ -1,6 +1,7 @@
-# action_horizon: predicted action chunk length.
-# execution_horizon: low-level control steps per upper VLM refresh.
-# They are independent; the pilot refreshes MiniCPM every 8 control steps.
+# action_horizon: number of actions predicted by the action head per call.
+# execution_horizon: number of predicted actions committed per call (when supported).
+# vlm_refresh_interval: control steps between upper VLM refreshes.
+# These are distinct; the pilot applies one action per control step and refreshes MiniCPM every 8 steps.
 run_id: minicpm_gr00t_dual_asy_libero
 run_root_dir: playground/Checkpoints
 seed: 42
@@ -24,7 +25,6 @@ framework:
     action_dim: 7
     state_dim: 7
     action_horizon: 8
-    execution_horizon: 8
     past_action_window_size: 0
     repeated_diffusion_steps: 2
     noise_beta_alpha: 1.5
@@ -43,6 +43,7 @@ framework:
       num_layers: 16
       output_dim: 1024
       positional_embeddings: null
+  vlm_refresh_interval: 8
   reduce_in_full_precision: true
 
 datasets:

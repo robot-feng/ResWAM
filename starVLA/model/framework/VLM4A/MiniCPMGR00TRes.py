@@ -40,7 +40,7 @@ class MiniCPM_GR00T(Qwen_GR00T):
 class MiniCPMGR00TRes(MiniCPMGR00TResCore):
     """MiniCPM-V history encoder with a DINO terminal-residual objective.
 
-    The independent ``runtime.execution_horizon`` controls upper VLM refreshes.
+    The independent ``runtime.vlm_refresh_interval`` controls upper VLM refreshes.
     This model has no action head and never reads ``action_horizon``; a lower
     GR00T policy may use its own action chunk length when this representation is
     connected in the next stage.

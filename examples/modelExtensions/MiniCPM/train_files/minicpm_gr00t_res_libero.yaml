@@ -26,7 +26,7 @@ framework:
     video_fps: 10.0
     video_downsample_mode: 16x
   runtime:
-    execution_horizon: 8
+    vlm_refresh_interval: 8
     cache_mode: recompute
     # Opt in only for full history. Prefix mode verifies decoded residuals
     # against full recomputation and falls back if relative RMS error > 0.05.
@@ -40,9 +40,9 @@ datasets:
     robot_type: libero_franka
     camera_key: video.primary_image
     video_backend: torchvision_av
-    # Populate this manifest from verified simulator success annotations.
-    # Missing annotations fail fast; recorded end-of-file frames are not labels.
-    success_terminal_manifest: playground/Annotations/libero_success_terminals.jsonl
+    # Explicit labels come from exact action alignment to the original LIBERO
+    # HDF5 done/reward signals; 7 ambiguous episodes remain invalid/unlabeled.
+    success_terminal_manifest: examples/modelExtensions/MiniCPM/annotations/libero_goal_success_terminals.jsonl
     assistant_label_manifest: null
     max_history_frames: null
 

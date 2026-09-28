@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 
 import pytest
 import torch
 from PIL import Image
 
+import starVLA.dataloader.minicpm_res_lerobot as residual_data
 from starVLA.dataloader.minicpm_res_lerobot import load_assistant_labels, load_success_terminals
 from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import _as_config
 from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import MiniCPMGR00TResCore
@@ -23,6 +25,86 @@ def test_residual_head_shapes_and_gradients():
     prediction.square().mean().backward()
     assert query.grad is not None and torch.isfinite(query.grad).all()
     assert all(parameter.grad is not None for parameter in head.parameters())
+
+
+def test_residual_target_alignment_zero_case_and_future_target_isolation():
+    captured = {}
+
+    class _HistoryAdapter:
+        def tokenize_history_query(self, instruction, episode_id, history, history_mode, device):
+            captured["history"] = list(history)
+            captured["instruction"] = instruction
+            captured["episode_id"] = episode_id
+            return {
+                "input_ids": torch.full((1, 256), 77, dtype=torch.long, device=device),
+                "attention_mask": torch.ones((1, 256), dtype=torch.long, device=device),
+            }
+
+    class _ConstantResidualHead(torch.nn.Module):
+        def forward(self, query_hidden_states):
+            return torch.full(
+                (query_hidden_states.shape[0], 256, 384),
+                0.25,
+                device=query_hidden_states.device,
+            )
+
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    model.history_adapter = _HistoryAdapter()
+    model.residual_head = _ConstantResidualHead()
+    model.num_residual_tokens = 256
+    model.residual_token_id = 77
+    model.prediction_target = "residual"
+    model.config = types.SimpleNamespace(
+        framework=types.SimpleNamespace(
+            residual_model=types.SimpleNamespace(history_mode="full")
+        )
+    )
+    model._device = types.MethodType(lambda self: torch.device("cpu"), model)
+    model._history_from_example = types.MethodType(
+        lambda self, example: (example["history"], example["lang"], example["episode_id"]),
+        model,
+    )
+    model._check_context_budget = types.MethodType(lambda self, inputs: 256, model)
+    model._encode_vlm = types.MethodType(
+        lambda self, inputs, use_cache: types.SimpleNamespace(
+            last_hidden_state=torch.zeros((1, 256, 1024), device=inputs["input_ids"].device)
+        ),
+        model,
+    )
+    current = Image.new("RGB", (8, 8), color=(1, 2, 3))
+    future = Image.new("RGB", (8, 8), color=(4, 5, 6))
+    feature_by_image_id = {
+        id(current): torch.ones((1, 256, 384)),
+        id(future): torch.full((1, 256, 384), 3.0),
+    }
+    model.encode_dino = types.MethodType(
+        lambda self, image: feature_by_image_id[id(image)], model
+    )
+    observed = HistoryFrame(current, "episode-a", 4, 0.4, "primary", 4)
+    example = {
+        "history": [observed],
+        "current_image": current,
+        "terminal_image": future,
+        "lang": "move the object",
+        "episode_id": "episode-a",
+        "goal_target_valid": True,
+    }
+
+    loss, outputs = model._forward_residual(example)
+    assert captured["history"] == [observed]
+    assert all(frame.image is not future for frame in captured["history"])
+    assert captured["episode_id"] == "episode-a"
+    assert torch.all(outputs["target_residual"] == 2.0)
+    assert torch.all(outputs["predicted_residual"] == 0.25)
+    assert torch.all(outputs["predicted_goal_features"] == 1.25)
+    assert loss.item() == pytest.approx((2.0 - 0.25) ** 2)
+
+    # At the annotated terminal step current and goal features are identical,
+    # so the target residual must be exactly zero.
+    zero_example = {**example, "terminal_image": current}
+    _, zero_outputs = model._forward_residual(zero_example)
+    assert torch.count_nonzero(zero_outputs["target_residual"]) == 0
 
 
 def test_gather_query_tokens_with_left_padding():
@@ -46,17 +128,17 @@ def test_history_frame_requires_explicit_valid_metadata():
         HistoryFrame(image, "episode-a", 0, float("nan"), "primary", 0)
 
 
-def test_execution_horizon_is_independent_of_action_horizon():
+def test_vlm_refresh_interval_is_independent_of_action_horizon():
     cfg = _as_config(
         {
             "framework": {
                 "action_model": {"action_horizon": 3},
-                "runtime": {"execution_horizon": 8},
+                "runtime": {"vlm_refresh_interval": 8},
             }
         }
     )
     assert cfg.framework.action_model.action_horizon == 3
-    assert cfg.framework.runtime.execution_horizon == 8
+    assert cfg.framework.runtime.vlm_refresh_interval == 8
     assert cfg.framework.residual_model.goal_target == "successful_terminal"
     assert cfg.framework.residual_model.prediction_target == "residual"
 
@@ -64,11 +146,25 @@ def test_execution_horizon_is_independent_of_action_horizon():
         {"framework": {"action_model": {"action_horizon": 3}}}
     )
     assert async_cfg.framework.action_model.action_horizon == 3
-    assert async_cfg.framework.action_model.execution_horizon == 8
+    assert async_cfg.framework.vlm_refresh_interval == 8
     async_cfg = _asy_config(
         {"framework": {"action_model": {"action_horizon": 3, "execution_horizon": 5}}}
     )
+    assert async_cfg.framework.vlm_refresh_interval == 8
     assert async_cfg.framework.action_model.execution_horizon == 5
+    explicit_cfg = _asy_config(
+        {
+            "framework": {
+                "vlm_refresh_interval": 2,
+                "action_model": {"action_horizon": 3, "execution_horizon": 5},
+            }
+        }
+    )
+    assert explicit_cfg.framework.vlm_refresh_interval == 2
+    assert explicit_cfg.framework.action_model.execution_horizon == 5
+
+    with pytest.raises(ValueError, match="controls action execution, not VLM refresh"):
+        _as_config({"framework": {"runtime": {"execution_horizon": 6}}})
 
 
 def test_prefix_cache_is_opt_in_and_has_a_decoded_output_tolerance():
@@ -82,7 +178,7 @@ def test_prefix_cache_is_opt_in_and_has_a_decoded_output_tolerance():
 def test_streaming_refresh_cadence_and_keeps_all_frames():
     model = object.__new__(MiniCPMGR00TResCore)
     torch.nn.Module.__init__(model)
-    model.execution_horizon = 8
+    model.vlm_refresh_interval = 8
     model._episode_id = None
     model._instruction = None
     model._history = []
@@ -115,7 +211,7 @@ def test_streaming_refresh_cadence_and_keeps_all_frames():
 def test_streaming_rejects_episode_switch_without_reset():
     model = object.__new__(MiniCPMGR00TResCore)
     torch.nn.Module.__init__(model)
-    model.execution_horizon = 8
+    model.vlm_refresh_interval = 8
     model._episode_id = None
     model._instruction = None
     model._history = []
@@ -132,7 +228,7 @@ def test_streaming_rejects_episode_switch_without_reset():
 def test_reset_episode_discards_hybrid_cache_and_reenables_validation():
     model = object.__new__(MiniCPMGR00TResCore)
     torch.nn.Module.__init__(model)
-    model.execution_horizon = 8
+    model.vlm_refresh_interval = 8
     model._episode_id = "episode-a"
     model._instruction = "task"
     model._history = [HistoryFrame(Image.new("RGB", (8, 8)), "episode-a", 0, 0, "primary", 0)]
@@ -212,6 +308,49 @@ def test_success_manifest_never_infers_final_episode_frame(tmp_path):
         empty = tmp_path / "empty.jsonl"
         empty.write_text(json.dumps({"episode_id": "4", "terminal_step": 9, "is_success": False}) + "\n")
         load_success_terminals(empty)
+
+
+def test_residual_dataset_episode_and_control_step_filters(tmp_path, monkeypatch):
+    manifest = tmp_path / "terminals.jsonl"
+    manifest.write_text(
+        "\n".join(
+            [
+                json.dumps({"episode_id": "0", "terminal_step": 15, "is_success": True}),
+                json.dumps({"episode_id": "1", "terminal_step": 15, "is_success": True}),
+                json.dumps({"episode_id": "2", "terminal_step": 15, "is_success": False}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    fake_dataset = types.SimpleNamespace(
+        all_steps=[(episode, step) for episode in range(3) for step in (0, 8)],
+        modality_keys={"video": ["video.primary_image"]},
+        trajectory_ids=[0, 1, 2],
+        trajectory_lengths=[16, 16, 16],
+    )
+    monkeypatch.setattr(residual_data, "make_LeRobotSingleDataset", lambda *args, **kwargs: fake_dataset)
+    selected = residual_data.MiniCPMResidualLeRobotDataset(
+        data_root_dir=Path(tmp_path),
+        dataset_name="fake",
+        robot_type="fake",
+        success_terminal_manifest=manifest,
+        camera_key="video.primary_image",
+        sample_stride=8,
+        episode_ids=["0", "1"],
+        control_steps=[8],
+    )
+    assert selected._steps == [(0, 8), (1, 8)]
+    with pytest.raises(ValueError, match="lack explicit successful-terminal labels"):
+        residual_data.MiniCPMResidualLeRobotDataset(
+            data_root_dir=Path(tmp_path),
+            dataset_name="fake",
+            robot_type="fake",
+            success_terminal_manifest=manifest,
+            camera_key="video.primary_image",
+            sample_stride=8,
+            episode_ids=["2"],
+        )
 
 
 def test_assistant_manifest_keys_and_duplicate_validation(tmp_path):

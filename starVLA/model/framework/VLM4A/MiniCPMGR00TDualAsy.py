@@ -50,6 +50,8 @@ def _asy_config(config):
         cfg.framework.qwenvl.attn_implementation = "sdpa"
     cfg.framework.setdefault("dino", {"dino_backbone": "dinov2_vits14"})
     cfg.framework.setdefault("action_model", {})
+    if cfg.framework.get("vlm_refresh_interval") is None:
+        cfg.framework.vlm_refresh_interval = 8
     action_defaults = {
         "action_model_type": "DiT-B",
         "action_hidden_dim": 1024,
@@ -59,9 +61,6 @@ def _asy_config(config):
         "action_dim": 7,
         "state_dim": 7,
         "action_horizon": 8,
-        # Number of low-level control steps between upper VLM refreshes.
-        # This is independent from action_horizon (the predicted action chunk).
-        "execution_horizon": 8,
         "num_inference_timesteps": 4,
         "num_target_vision_tokens": 32,
         "noise_beta_alpha": 1.5,
@@ -88,12 +87,11 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
     def __init__(self, config: Optional[dict] = None, **kwargs) -> None:
         cfg = _asy_config(config)
         super().__init__(config=cfg, **kwargs)
-        # action_horizon is the predicted action chunk length. execution_horizon
-        # is the independent number of low-level control steps per VLM refresh.
-        self.execution_horizon = int(self.config.framework.action_model.execution_horizon)
-        self.vlm_update_interval = self.execution_horizon
+        # Keep VLM refresh cadence separate from action chunk/execution lengths.
+        self.vlm_refresh_interval = int(self.config.framework.vlm_refresh_interval)
+        self.vlm_update_interval = self.vlm_refresh_interval
         if self.vlm_update_interval < 1:
-            raise ValueError("framework.action_model.execution_horizon must be >= 1")
+            raise ValueError("framework.vlm_refresh_interval must be >= 1")
 
         self._async_generation = 0
         self._control_step = 0

@@ -103,12 +103,12 @@ class _ThreadedTCPServer(socketserver.ThreadingTCPServer):
         self.policy = policy
 
 
-def _build_examples(dataset, frame_ids, execution_horizon, asynchronous):
+def _build_examples(dataset, frame_ids, vlm_refresh_interval, asynchronous):
     examples = []
     for frame_id in frame_ids:
         example = copy.deepcopy(dataset[frame_id])
         if asynchronous:
-            anchor_id = frame_id - frame_id % execution_horizon
+            anchor_id = frame_id - frame_id % vlm_refresh_interval
             example["vlm_image"] = copy.deepcopy(dataset[anchor_id]["image"])
             example["vlm_anchor_frame"] = anchor_id
         examples.append(example)
@@ -271,10 +271,10 @@ def main():
         help="model variants to run (defaults to the three-way comparison)",
     )
     parser.add_argument(
-        "--execution-horizon",
+        "--vlm-refresh-interval",
         type=int,
         default=None,
-        help="low-level control steps between VLM refreshes (defaults independently to 8)",
+        help="control steps between upper VLM refreshes (defaults to 8)",
     )
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=1234)
@@ -293,19 +293,19 @@ def main():
     base_cfg.framework.action_model.action_horizon = int(
         base_cfg.framework.action_model.get("action_horizon", 8)
     )
-    prediction_horizon = int(base_cfg.framework.action_model.action_horizon)
+    action_chunk_length = int(base_cfg.framework.action_model.action_horizon)
     async_cfg = OmegaConf.load(args.async_config)
-    configured_execution_horizon = async_cfg.framework.action_model.get("execution_horizon")
-    execution_horizon = args.execution_horizon
-    if execution_horizon is None:
-        execution_horizon = configured_execution_horizon
-    if execution_horizon is None:
-        execution_horizon = 8
-    execution_horizon = int(execution_horizon)
-    if prediction_horizon < 1:
+    configured_refresh_interval = async_cfg.framework.get("vlm_refresh_interval")
+    vlm_refresh_interval = args.vlm_refresh_interval
+    if vlm_refresh_interval is None:
+        vlm_refresh_interval = configured_refresh_interval
+    if vlm_refresh_interval is None:
+        vlm_refresh_interval = 8
+    vlm_refresh_interval = int(vlm_refresh_interval)
+    if action_chunk_length < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
-    if execution_horizon < 1:
-        raise ValueError("framework.action_model.execution_horizon must be >= 1")
+    if vlm_refresh_interval < 1:
+        raise ValueError("framework.vlm_refresh_interval must be >= 1")
 
     from starVLA.dataloader.lerobot_datasets import make_LeRobotSingleDataset
 
@@ -320,7 +320,7 @@ def main():
     if len(episode0_steps) < 24 or episode0_steps[:3] != [0, 1, 2]:
         raise RuntimeError(f"could not identify the expected episode 0 window: {episode0_steps[:10]}")
     frame_count = len(episode0_steps)
-    max_frame = min(frame_count - prediction_horizon, 47)
+    max_frame = min(frame_count - action_chunk_length, 47)
     selected = [int(x) for x in TRAIN_FRAME_IDS if x < max_frame]
     if len(selected) < args.train_steps:
         raise ValueError(f"episode 0 has too few valid frames for {args.train_steps} updates")
@@ -332,7 +332,7 @@ def main():
     asy_examples = []
     for frame in selected:
         example = copy.deepcopy(raw_examples[frame])
-        anchor = frame - frame % execution_horizon
+        anchor = frame - frame % vlm_refresh_interval
         if anchor not in raw_examples:
             raw_examples[anchor] = dataset[anchor]
         example["vlm_image"] = copy.deepcopy(raw_examples[anchor]["image"])
@@ -341,23 +341,24 @@ def main():
     heldout_frame = min(23, max_frame - 1)
     heldout = copy.deepcopy(raw_examples.get(heldout_frame) or dataset[heldout_frame])
     heldout["vlm_image"] = copy.deepcopy(
-        dataset[heldout_frame - heldout_frame % execution_horizon]["image"]
+        dataset[heldout_frame - heldout_frame % vlm_refresh_interval]["image"]
     )
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"
     base_cfg.framework.qwenvl.attn_implementation = "sdpa"
     base_cfg.framework.action_model.repeated_diffusion_steps = 1
     # Keep this explicitly independent from action_horizon. The synchronous
-    # baselines ignore it; the async model uses it for the VLM refresh cadence.
-    base_cfg.framework.action_model.execution_horizon = execution_horizon
+    # baselines ignore it; the async model uses it for upper VLM refreshes.
+    base_cfg.framework.vlm_refresh_interval = vlm_refresh_interval
     base_cfg.datasets.vla_data.obs_image_size = [224, 224]
     base_cfg.trainer.freeze_modules = "qwen_vl_interface,dino_encoder"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"[pilot] dataset episode=0 task='put the bowl on the plate' frames={frame_count}")
     print(
-        f"[pilot] train_frames={selected} prediction_horizon={prediction_horizon} "
-        f"execution_horizon={execution_horizon} VLM_refresh=every_{execution_horizon}_control_steps "
+        f"[pilot] train_frames={selected} action_chunk_length={action_chunk_length} "
+        f"vlm_refresh_interval={vlm_refresh_interval} "
+        f"VLM_refresh=every_{vlm_refresh_interval}_control_steps "
         f"device={device}"
     )
     print(f"[pilot] results={output_dir}")
@@ -369,9 +370,9 @@ def main():
         "episode_frames": frame_count,
         "training_frames": selected,
         "heldout_frame": heldout_frame,
-        "prediction_horizon": prediction_horizon,
-        "execution_horizon": execution_horizon,
-        "vlm_update_interval": execution_horizon,
+        "action_horizon": action_chunk_length,
+        "vlm_refresh_interval": vlm_refresh_interval,
+        "vlm_update_interval": vlm_refresh_interval,
         "max_control_steps": args.max_control_steps,
         "models": {},
     }

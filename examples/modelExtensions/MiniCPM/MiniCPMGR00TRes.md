@@ -15,16 +15,17 @@ These are different quantities and are configured separately:
 | Name | Meaning | Owner |
 | --- | --- | --- |
 | `goal_target: successful_terminal` | Which future state labels the residual. It is an episode terminal annotation, not an N-step numeric horizon. | Residual dataset/model |
-| `runtime.execution_horizon` | Number of low-level control steps between upper VLM refreshes. Default: 8. | `MiniCPMGR00TRes` runtime |
-| `action_horizon` | Number of action steps returned in one action chunk. It is not read by this representation model. | Downstream GR00T/action policy |
+| `action_model.action_horizon` | Length of the action sequence predicted by an action head. It is not read by this representation model. | Downstream GR00T/action policy |
+| `action_model.execution_horizon` | Number of predicted actions emitted/committed per call by a policy that supports chunked execution, such as RollFlow. | Action executor / RTC policy |
+| `runtime.vlm_refresh_interval` | Number of low-level control steps between upper VLM refreshes. Default: 8. | `MiniCPMGR00TRes` runtime |
 
-`action_horizon` and `execution_horizon` can both be 8 in an experiment while
-remaining independent settings. The original `QwenDual` framework has the
-action chunk field; the MiniCPM async pilot adds a separate
-`execution_horizon` with its own default of 8, even when an older config omits
-it. `starVLA.model.framework.share_tools.apply_config_compat` only normalizes
-`action_horizon` and its legacy `future_action_window_size` alias; it does not
-define a universal execution cadence.
+The action chunk, action commit length, and VLM refresh cadence may happen to
+share the value 8 in an experiment, while remaining independently configurable.
+This framework requires `runtime.vlm_refresh_interval` for VLM updates; it does
+not reinterpret either `action_model.execution_horizon` or
+`runtime.execution_horizon` as a VLM setting. `share_tools.apply_config_compat`
+normalizes `action_horizon` and its legacy `future_action_window_size` alias;
+it does not define a universal execution cadence.
 
 ## Required annotation files
 
@@ -44,12 +45,19 @@ ignored; unlabelled episodes and post-terminal steps are excluded. Optional
 ```
 
 Do not create a success row by assuming that a dataset's final saved frame is
-successful. The checked LIBERO metadata currently contains episode lengths,
-tasks, and timestamps, but no verified success-terminal label manifest.
+successful. The included LIBERO manifest was built by uniquely matching each
+LeRobot action sequence to its original LIBERO HDF5 demonstration, then reading
+that demonstration's terminal `done` and `reward` labels. It labels 421 of 428
+episodes; seven ambiguous/unmatched episodes are explicitly left unsuccessful
+for training purposes. Per-episode source provenance and endpoint RGB comparison
+measurements are stored in the manifest.
 
 ## Train and evaluate
 
-After providing the verified annotation files at the configured paths:
+The configured path already points to the verified sidecar
+`examples/modelExtensions/MiniCPM/annotations/libero_goal_success_terminals.jsonl`.
+The manifest labels only the 421 uniquely matched episodes; it does not alter
+the source LeRobot dataset.
 
 ```bash
 conda run -n ResWAM python examples/modelExtensions/MiniCPM/train_files/train_minicpm_gr00t_res.py \
@@ -94,7 +102,7 @@ fail clearly. A `max_history_frames` setting is an explicit context-window
 ablation.
 
 The trainer samples upper-system anchors at `control_step %
-runtime.execution_horizon == 0`. Within each selected sample, the VLM input
+runtime.vlm_refresh_interval == 0`. Within each selected sample, the VLM input
 still contains every frame observed from episode start through that anchor.
 This aligns training refresh cadence with streaming inference while keeping
 the action chunk length independent.
@@ -104,7 +112,7 @@ the action chunk length independent.
 Call `reset_episode`, then `observe(image, control_step, timestamp_seconds,
 instruction, episode_id)` for every incoming frame. `observe` records every
 frame and refreshes `predict_goal` initially and after each configured
-`execution_horizon`; each result reports `plan_age`, current history size, and
+`vlm_refresh_interval`; each result reports `plan_age`, current history size, and
 the reference timestamp. While a cached plan is being reused,
 `history_frame_count` tracks received frames and `plan_history_frame_count`
 tracks how many frames were used to produce that plan. `predict_goal` can also

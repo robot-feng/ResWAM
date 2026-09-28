@@ -34,15 +34,24 @@ def main() -> None:
         default=Path(__file__).with_name("minicpm_gr00t_res_libero.yaml"),
     )
     parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--save-every", type=int, default=None, help="checkpoint cadence override")
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--init-checkpoint",
+        type=Path,
+        default=None,
+        help="initialize trainable weights from a strict ResWAM checkpoint; optimizer state starts fresh",
+    )
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--episode-ids", default=None, help="optional comma-separated episode IDs for a controlled subset")
+    parser.add_argument("--control-steps", default=None, help="optional comma-separated control-step indices")
     parser.add_argument("--dry-run", action="store_true", help="Build data/model and run one loss/gradient step")
     args = parser.parse_args()
 
     cfg = OmegaConf.load(args.config)
     inherited = cfg.get("defaults")
     if inherited:
-        if not isinstance(inherited, (list, tuple)) or len(inherited) != 1 or not isinstance(inherited[0], str):
+        if not OmegaConf.is_list(inherited) or len(inherited) != 1 or not isinstance(inherited[0], str):
             raise ValueError("only one string config parent is supported in defaults")
         parent_path = (args.config.parent / inherited[0]).with_suffix(".yaml")
         if not parent_path.is_file():
@@ -58,6 +67,14 @@ def main() -> None:
         torch.backends.cuda.matmul.allow_tf32 = True
 
     dc = cfg.datasets.residual_data
+    episode_ids = (
+        None if args.episode_ids is None else [item.strip() for item in args.episode_ids.split(",") if item.strip()]
+    )
+    control_steps = (
+        None
+        if args.control_steps is None
+        else [int(item.strip()) for item in args.control_steps.split(",") if item.strip()]
+    )
     dataset = MiniCPMResidualLeRobotDataset(
         data_root_dir=dc.data_root_dir,
         dataset_name=dc.dataset_name,
@@ -68,7 +85,9 @@ def main() -> None:
         video_backend=dc.video_backend,
         data_cfg={"video_backend": dc.video_backend, "include_state": False},
         max_history_frames=dc.get("max_history_frames"),
-        sample_stride=int(cfg.framework.runtime.execution_horizon),
+        sample_stride=int(cfg.framework.runtime.vlm_refresh_interval),
+        episode_ids=episode_ids,
+        control_steps=control_steps,
     )
     loader = DataLoader(
         dataset,
@@ -83,6 +102,8 @@ def main() -> None:
     model = MiniCPMGR00TRes(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    if args.init_checkpoint is not None:
+        model.load_reswam_checkpoint(args.init_checkpoint)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -100,7 +121,7 @@ def main() -> None:
     if grad_accum < 1:
         raise ValueError("gradient_accumulation_steps must be >= 1")
     log_every = int(cfg.trainer.get("log_every", 10))
-    save_every = int(cfg.trainer.get("save_every", 100))
+    save_every = int(args.save_every if args.save_every is not None else cfg.trainer.get("save_every", 100))
     max_grad_norm = float(cfg.trainer.get("max_grad_norm", 1.0))
 
     model.train()

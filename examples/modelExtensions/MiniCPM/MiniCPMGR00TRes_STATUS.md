@@ -14,7 +14,7 @@ effectiveness claim.
   hard budget.
 - Explicit successful-terminal LeRobot annotations; unlabelled episodes and
   post-terminal steps are excluded. Training samples are aligned to
-  `runtime.execution_horizon`, and each selected sample still contains all
+  `runtime.vlm_refresh_interval`, and each selected sample still contains all
   observations up to that step.
 - Separate residual and optional assistant-text forwards; only assistant
   answer tokens contribute to text loss. DINO teacher and the MiniCPM visual
@@ -22,7 +22,7 @@ effectiveness claim.
 - History ablation evaluator can mask the oldest, middle, or most recent past
   frame with a neutral image while retaining its timestamp and sequence slot.
 - Streaming `reset_episode`, `observe`, `predict_goal`; default refresh interval
-  is `runtime.execution_horizon: 8`. It does not read a lower policy's
+  is `runtime.vlm_refresh_interval: 8`. It does not read a lower policy's
   `action_horizon`.
 - Dedicated trainer, zero-residual comparison/profile evaluator, configs for
   full-history/current-only and residual/absolute-goal ablations, strict
@@ -48,8 +48,18 @@ effectiveness claim.
   `video.primary_image`, language key is
   `annotation.human.action.task_description`, and raw episode timestamps are
   available.
-- Python compilation passed. Focused component and async compatibility tests:
-  `11 passed`.
+- Generated the explicit success-terminal sidecar at
+  `examples/modelExtensions/MiniCPM/annotations/libero_goal_success_terminals.jsonl`.
+  Across 428 LeRobot episodes, 421 action sequences uniquely match one of the
+  500 original LIBERO `libero_goal` HDF5 demos using ordered exact matching on
+  the first six action dimensions. All 421 source demos have terminal
+  `done=1,reward=1`; the other seven episodes are explicitly left unlabeled.
+  The 421 encoded LeRobot terminal video frames decoded without errors and had
+  RGB MAE to their source HDF5 terminal images of 8.48 median, 12.54 p95, and
+  16.98 maximum on a 0–255 scale, after the source camera rotation and resize.
+  The dataset adapter then opened the sidecar read-only: 3,386 samples at the
+  configured stride of 8 across 421 labeled episodes, seven excluded episodes,
+  with a valid current image, terminal image, and full prefix on the first sample.
 - Framework auto-discovery resolved `MiniCPMGR00T` to the original class and
   registered the new class under `MiniCPMGR00TRes`.
 - Runtime fake-policy test confirmed refresh at control steps 0, 8, and 16,
@@ -66,13 +76,11 @@ effectiveness claim.
   inference cache path but does not claim exact text generation or validation
   for a trained checkpoint.
 - Framework-level GPU smoke ran 9 frames through `observe` with an 8-step
-  execution horizon. It refreshed at steps 0 and 8, appended the intervening 8
+  VLM refresh interval. It refreshed at steps 0 and 8, appended the intervening 8
   frames in one cache update, and validated both outputs against full
   recomputation. Residual relative RMS differences were 2.48% and 2.38%; the
   cache stayed enabled under the default 5% threshold. The report was written
   to `/tmp/reswam_prefix_cache_smoke.json`.
-- Focused components and Dual compatibility tests: `14 passed`; Python
-  compilation and `git diff --check` passed.
 - Full-size checkpoint round-trip used the actual model with 334 trainable
   tensors. After saving a 1.51 GB temporary checkpoint, mutating a trainable
   parameter, and loading it back, a byte digest of every trainable tensor
@@ -96,21 +104,60 @@ effectiveness claim.
   This does not establish a model-imposed 32-frame limit; it means the current
   shared-GPU run only verified up to 8 frames. Report:
   `/tmp/reswam_synthetic_profile.json`.
+- Installed `starVLA` 1.0.1 in Conda environment `ResWAM` as a PEP 660 editable
+  install from `/data/tzq/ResWAM`. Importing from `/tmp` resolved
+  `starVLA.__file__` to `/data/tzq/ResWAM/starVLA/__init__.py`, and package
+  metadata reports `editable: true` for that source directory.
+- A one-update BF16 dry-run against the verified LIBERO manifest completed with
+  residual/total loss `2.7029`, gradient norm `34.85`, text supervision off,
+  and peak allocated CUDA memory `8,856,342,016` bytes. The checkpoint restored
+  its expanded tokenizer and model metadata.
+- Latest tests were run from `/tmp` against the editable package:
+  `tests/test_minicpm_gr00t_res_components.py` and
+  `tests/test_minicpm_gr00t_dual.py` passed (`16 passed, 3 warnings`). The new
+  CPU target test checks `z_goal-z_current`, exact zero residual at the terminal
+  frame, and that the future image is absent from the VLM history. Python
+  `compileall` for changed modules and `git diff --check` passed. Current diff
+  does not modify `MiniCPMGR00T.py`, `QwenDual.py`, or `QwenOFT.py`.
+- A small labeled LIBERO ablation used episodes `0,1,3,6,7` for training and
+  `2,4,10,21,422` for evaluation, with one sample per episode at
+  control step 8. Every full-history sample contained nine frames. Each
+  36-update variant used 12 initial updates plus a 24-update continuation
+  with a fresh optimizer; the full-history residual variant then received 36
+  additional updates under another fresh optimizer. Text supervision was
+  disabled because no assistant-answer labels were provided. Evaluation
+  episodes were inspected after 36 updates and informed the decision to
+  continue to 72, so they are validation examples rather than a final test set.
+- At 36 updates, full-history residual prediction scored mean evaluation DINO
+  residual MSE `2.0255` versus `2.0236` for the zero-residual baseline (0.09%
+  worse). Absolute-goal prediction, converted back to residual at evaluation,
+  scored `4.7283`; current-only residual prediction scored `2.0260`, essentially
+  identical to full history at this budget.
+- After 72 total updates, full-history residual MSE was `2.0026` on the five
+  evaluation examples (1.04% below zero residual), `2.3337` on training examples
+  (versus `2.4172`), and `2.1682` overall (versus `2.2204`). This is a small,
+  preliminary signal, not statistically reliable evidence of general
+  representation improvement. See `MiniCPMGR00TRes_ABLATION.md` for the full
+  comparison and limitations; raw evaluation JSON and checkpoints are in
+  `/data/tzq/tmp/reswam_ablation_20260928`, outside the repository.
 
-## Not yet verified / blocked on data or further implementation
+## Not yet verified
 
-- The checked LIBERO metadata has no verified success-terminal annotation
-  manifest. Real training, the zero-residual baseline comparison, and
-  few-sample overfit therefore have not been run. The trainer intentionally
-  fails until that explicit manifest is supplied.
-- Cache validation used a randomly initialized residual decoder because no
-  trained checkpoint exists yet. Prefix mode defaults to a 5% decoded-residual
-  relative RMS limit, validates the first refresh and then every 8th refresh,
-  and falls back to recomputation for the episode on failure. Text logits show
-  measurable numerical drift; deterministic text generation must use
-  recomputation or receive its own validation.
-- No latency, peak-memory, or residual-vs-zero comparison has been measured on
-  a verified LIBERO terminal manifest or trained checkpoint. The current
-  latency and memory profile uses synthetic images and one run per history
-  length; the labeled-data evaluator remains available for the real experiment.
-- No rollout-success or cross-embodiment result is claimed.
+- Joint text-plus-residual training has not been run because there is no
+  assistant-answer label manifest; the real-data ablation is residual-only.
+  The 72-update run lowered training MSE, but its evaluation result covers only
+  five episodes and one split. It is not a robust overfit or generalization
+  study.
+- Cache validation used a randomly initialized residual decoder. Validation
+  with a trained checkpoint is still outstanding. Prefix mode defaults to a
+  5% decoded-residual relative RMS limit, validates the first refresh and then
+  every 8th refresh, and falls back to recomputation for the episode on
+  failure. Text logits show measurable numerical drift; deterministic text
+  generation must use recomputation or receive its own validation.
+- The real-data timing and memory values are single-run measurements on a
+  9-frame sample path, not a history-length scaling benchmark with a trained
+  checkpoint. The 32-frame synthetic profile remains unverified because of
+  shared-GPU memory pressure.
+- The evaluation covers one control step from five episodes, not full
+  trajectories, and informed checkpoint continuation. No rollout-success,
+  task-level representation utility, or cross-embodiment result is claimed.

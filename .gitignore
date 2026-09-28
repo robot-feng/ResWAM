@@ -240,6 +240,7 @@ wandb/*
 
 # Whitelist specific docs that should be tracked
 !.github/PULL_REQUEST_TEMPLATE.md
+!examples/modelExtensions/MiniCPM/MiniCPMGR00TRes_ABLATION.md
 !docs/branching_strategy.md
 !docs/PR_readme.md
 !docs/CONTRIBUTING.md

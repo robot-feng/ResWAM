@@ -22,7 +22,7 @@ def _load_cfg(path: Path):
     cfg = OmegaConf.load(path)
     inherited = cfg.get("defaults")
     if inherited:
-        if len(inherited) != 1 or not isinstance(inherited[0], str):
+        if not OmegaConf.is_list(inherited) or len(inherited) != 1 or not isinstance(inherited[0], str):
             raise ValueError("only one string config parent is supported in defaults")
         parent_path = (path.parent / inherited[0]).with_suffix(".yaml")
         del cfg["defaults"]
@@ -40,6 +40,10 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--max-samples", type=int, default=16)
+    parser.add_argument(
+        "--episode-ids", default=None, help="optional comma-separated episode IDs for a held-out split"
+    )
+    parser.add_argument("--control-steps", default=None, help="optional comma-separated control-step indices")
     parser.add_argument("--profile-history-lengths", default="1,8,32,all")
     parser.add_argument(
         "--mask-history-frame",
@@ -51,6 +55,14 @@ def main() -> None:
     args = parser.parse_args()
     cfg = _load_cfg(args.config)
     dataset_cfg = cfg.datasets.residual_data
+    episode_ids = (
+        None if args.episode_ids is None else [item.strip() for item in args.episode_ids.split(",") if item.strip()]
+    )
+    control_steps = (
+        None
+        if args.control_steps is None
+        else [int(item.strip()) for item in args.control_steps.split(",") if item.strip()]
+    )
     dataset = MiniCPMResidualLeRobotDataset(
         data_root_dir=dataset_cfg.data_root_dir,
         dataset_name=dataset_cfg.dataset_name,
@@ -61,7 +73,9 @@ def main() -> None:
         video_backend=dataset_cfg.video_backend,
         data_cfg={"video_backend": dataset_cfg.video_backend, "include_state": False},
         max_history_frames=dataset_cfg.get("max_history_frames"),
-        sample_stride=int(cfg.framework.runtime.execution_horizon),
+        sample_stride=int(cfg.framework.runtime.vlm_refresh_interval),
+        episode_ids=episode_ids,
+        control_steps=control_steps,
     )
     model = MiniCPMGR00TRes(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -80,7 +94,7 @@ def main() -> None:
         "goal_target": "successful_terminal",
         "prediction_target": model.prediction_target,
         "mask_history_frame": args.mask_history_frame,
-        "execution_horizon": model.execution_horizon,
+        "vlm_refresh_interval": model.vlm_refresh_interval,
         "action_horizon": "owned by downstream action policy; not consumed here",
         "device": str(device),
         "history_profiles": [],

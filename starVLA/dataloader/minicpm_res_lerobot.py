@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 from PIL import Image
@@ -123,6 +123,8 @@ class MiniCPMResidualLeRobotDataset(Dataset):
         data_cfg: dict[str, Any] | None = None,
         max_history_frames: int | None = None,
         sample_stride: int = 1,
+        episode_ids: Sequence[str | int] | None = None,
+        control_steps: Sequence[int] | None = None,
     ) -> None:
         self.dataset = make_LeRobotSingleDataset(
             Path(data_root_dir),
@@ -164,8 +166,27 @@ class MiniCPMResidualLeRobotDataset(Dataset):
             and int(item[1]) % self.sample_stride == 0
         ]
         self.excluded_episodes = len(known_episode_ids - set(self.success_terminals))
+        if episode_ids is not None:
+            selected_ids = {str(episode_id) for episode_id in episode_ids}
+            unknown_ids = selected_ids - known_episode_ids
+            if unknown_ids:
+                raise ValueError(f"unknown LeRobot episode IDs requested: {sorted(unknown_ids)[:8]}")
+            unlabelled_ids = selected_ids - set(self.success_terminals)
+            if unlabelled_ids:
+                raise ValueError(
+                    "requested episodes lack explicit successful-terminal labels: "
+                    f"{sorted(unlabelled_ids)[:8]}"
+                )
+            self._steps = [item for item in self._steps if str(item[0]) in selected_ids]
+        if control_steps is not None:
+            selected_steps = {int(step) for step in control_steps}
+            if not selected_steps or min(selected_steps) < 0:
+                raise ValueError("control_steps must contain nonnegative step indices")
+            self._steps = [item for item in self._steps if int(item[1]) in selected_steps]
         if not self._steps:
-            raise ValueError("no LeRobot steps belong to explicitly successful terminal episodes")
+            raise ValueError(
+                "no LeRobot steps match the explicit success labels and requested episode/control-step filters"
+            )
 
     def __len__(self) -> int:
         return len(self._steps)

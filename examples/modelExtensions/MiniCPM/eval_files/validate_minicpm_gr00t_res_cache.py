@@ -58,7 +58,7 @@ def main() -> None:
 
     rows = []
     t0 = time.perf_counter()
-    horizon = model.execution_horizon
+    horizon = model.vlm_refresh_interval
     for frame_idx in range(args.frames):
         image = Image.new(
             "RGB",
@@ -97,7 +97,7 @@ def main() -> None:
         "device": str(device),
         "checkpoint": None if args.checkpoint is None else str(args.checkpoint),
         "synthetic_frames": args.frames,
-        "execution_horizon": horizon,
+        "vlm_refresh_interval": horizon,
         "cache_validate_every": model.prefix_cache_validate_every,
         "cache_max_relative_rms": model.prefix_cache_max_relative_rms,
         "elapsed_seconds": time.perf_counter() - t0,

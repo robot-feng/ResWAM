@@ -73,13 +73,20 @@ def _as_config(config: Any) -> DictConfig:
             "runtime": {
                 # This is the upper VLM refresh interval. It is independent of
                 # any lower GR00T action_model.action_horizon.
-                "execution_horizon": 8,
+                "vlm_refresh_interval": 8,
                 "cache_mode": "recompute",
                 "prefix_cache_validate_every": 8,
                 "prefix_cache_max_relative_rms": 0.05,
             },
         }
     )
+    runtime_cfg = OmegaConf.select(cfg, "framework.runtime", default=None)
+    if runtime_cfg is not None:
+        if runtime_cfg.get("execution_horizon") is not None:
+            raise ValueError(
+                "runtime.execution_horizon controls action execution, not VLM refresh; "
+                "use runtime.vlm_refresh_interval for the VLM cadence"
+            )
     cfg.framework = OmegaConf.merge(defaults, cfg.framework)
     if "datasets" not in cfg or cfg.datasets is None:
         cfg.datasets = {}
@@ -94,7 +101,7 @@ class MiniCPMGR00TResCore(baseframework):
     """Task-conditioned prediction of a successful terminal DINO feature delta.
 
     The target is defined by an explicit successful-terminal annotation, not a
-    numeric frame offset. ``runtime.execution_horizon`` controls how often the
+    numeric frame offset. ``runtime.vlm_refresh_interval`` controls how often the
     upper VLM is refreshed. A lower action chunk length is deliberately not
     consumed by this model.
     """
@@ -115,8 +122,8 @@ class MiniCPMGR00TResCore(baseframework):
             and str(self.config.framework.residual_model.history_mode) != "full"
         ):
             raise ValueError("cache_mode='prefix' requires residual_model.history_mode='full'")
-        if int(self.config.framework.runtime.execution_horizon) < 1:
-            raise ValueError("runtime.execution_horizon must be >= 1")
+        if int(self.config.framework.runtime.vlm_refresh_interval) < 1:
+            raise ValueError("runtime.vlm_refresh_interval must be >= 1")
         if int(self.config.framework.runtime.prefix_cache_validate_every) < 1:
             raise ValueError("runtime.prefix_cache_validate_every must be >= 1")
         if float(self.config.framework.runtime.prefix_cache_max_relative_rms) <= 0:
@@ -161,7 +168,7 @@ class MiniCPMGR00TResCore(baseframework):
         self.dino_teacher_sha256 = self._module_sha256(self.dino_encoder)
         self._freeze_micromamba_vision()
 
-        self.execution_horizon = int(self.config.framework.runtime.execution_horizon)
+        self.vlm_refresh_interval = int(self.config.framework.runtime.vlm_refresh_interval)
         self.cache_mode = cache_mode
         self.prefix_cache_validate_every = int(
             self.config.framework.runtime.prefix_cache_validate_every
@@ -446,7 +453,7 @@ class MiniCPMGR00TResCore(baseframework):
         should_refresh = (
             self._cached_goal is None
             or instruction_changed
-            or step - int(self._cached_refresh_step) >= self.execution_horizon
+            or step - int(self._cached_refresh_step) >= self.vlm_refresh_interval
         )
         if should_refresh:
             goal = self.predict_goal()
@@ -718,7 +725,7 @@ class MiniCPMGR00TResCore(baseframework):
             },
             "prediction_target": self.prediction_target,
             "goal_target": str(self.config.framework.residual_model.goal_target),
-            "execution_horizon": self.execution_horizon,
+            "vlm_refresh_interval": self.vlm_refresh_interval,
             "config": OmegaConf.to_container(self.config, resolve=False),
             "trainable_parameter_names": sorted(trainable_names),
         }

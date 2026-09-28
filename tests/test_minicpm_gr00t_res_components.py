@@ -10,6 +10,11 @@ from PIL import Image
 
 import starVLA.dataloader.minicpm_res_lerobot as residual_data
 from starVLA.dataloader.minicpm_res_lerobot import load_assistant_labels, load_success_terminals
+from starVLA.dataloader.minicpm_res_splits import (
+    build_residual_split_manifest,
+    load_residual_episode_split,
+    validate_residual_split_manifest,
+)
 from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import _as_config
 from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import MiniCPMGR00TResCore
 from starVLA.model.framework.VLM4A.MiniCPMGR00TDualAsy import _asy_config
@@ -350,6 +355,121 @@ def test_residual_dataset_episode_and_control_step_filters(tmp_path, monkeypatch
             camera_key="video.primary_image",
             sample_stride=8,
             episode_ids=["2"],
+        )
+
+
+def test_residual_split_manifest_pins_legacy_validation_and_blocks_group_leakage(tmp_path):
+    dataset_path = tmp_path / "fake_dataset"
+    meta_path = dataset_path / "meta"
+    meta_path.mkdir(parents=True)
+    task_by_id = {
+        "0": "task-a",
+        "1": "task-a",
+        "2": "task-a",
+        "3": "task-a",
+        "4": "task-b",
+        "5": "task-b",
+        "6": "task-b",
+        "7": "task-b",
+        "8": "task-a",
+        "9": "task-b",
+    }
+    (meta_path / "episodes.jsonl").write_text(
+        "".join(
+            json.dumps(
+                {
+                    "episode_index": int(episode_id),
+                    "tasks": [task],
+                    "length": 4,
+                }
+            )
+            + "\n"
+            for episode_id, task in task_by_id.items()
+        ),
+        encoding="utf-8",
+    )
+
+    annotation_path = tmp_path / "terminals.jsonl"
+    rows = []
+    for episode_id, task in task_by_id.items():
+        if episode_id == "9":
+            rows.append(
+                {
+                    "episode_id": episode_id,
+                    "task": task,
+                    "is_success": False,
+                    "reason": "ambiguous",
+                }
+            )
+            continue
+        source_demo = "demo_0" if episode_id in ("0", "8") else f"demo_{episode_id}"
+        source_file = "task_a.hdf5" if task == "task-a" else "task_b.hdf5"
+        rows.append(
+            {
+                "episode_id": episode_id,
+                "task": task,
+                "terminal_step": 3,
+                "is_success": True,
+                "provenance": {
+                    "source_file": source_file,
+                    "source_demo": source_demo,
+                },
+            }
+        )
+    annotation_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+
+    options = {
+        "success_terminal_manifest": annotation_path,
+        "dataset_path": dataset_path,
+        "success_manifest_repo_path": "terminals.jsonl",
+        "seed": 17,
+        "legacy_train_episode_ids": ("0",),
+        "legacy_validation_episode_ids": ("1",),
+    }
+    manifest = build_residual_split_manifest(**options)
+    assert manifest == build_residual_split_manifest(**options)
+    validate_residual_split_manifest(
+        manifest,
+        success_terminal_manifest=annotation_path,
+        dataset_path=dataset_path,
+    )
+    split_path = tmp_path / "split.json"
+    split_path.write_text(json.dumps(manifest), encoding="utf-8")
+    train = load_residual_episode_split(
+        split_path,
+        split="train",
+        success_terminal_manifest=annotation_path,
+        dataset_path=dataset_path,
+    )
+    validation = load_residual_episode_split(
+        split_path,
+        split="validation",
+        success_terminal_manifest=annotation_path,
+        dataset_path=dataset_path,
+    )
+    test = load_residual_episode_split(
+        split_path,
+        split="test",
+        success_terminal_manifest=annotation_path,
+        dataset_path=dataset_path,
+    )
+    assert "0" in train["episode_ids"] and "8" in train["episode_ids"]
+    assert "1" in validation["episode_ids"]
+    assert set(train["episode_ids"]).isdisjoint(validation["episode_ids"])
+    assert set(train["episode_ids"]).isdisjoint(test["episode_ids"])
+    assert set(validation["episode_ids"]).isdisjoint(test["episode_ids"])
+    assert manifest["counts"]["excluded_unlabeled_episodes"] == 1
+    assert manifest["counts"]["source_demo_groups"] == 8
+
+    annotation_path.write_text(annotation_path.read_text() + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="annotation hash"):
+        load_residual_episode_split(
+            split_path,
+            split="test",
+            success_terminal_manifest=annotation_path,
+            dataset_path=dataset_path,
         )
 
 

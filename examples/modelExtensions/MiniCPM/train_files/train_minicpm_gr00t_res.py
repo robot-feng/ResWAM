@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from starVLA.dataloader.minicpm_res_lerobot import MiniCPMResidualLeRobotDataset
+from starVLA.dataloader.minicpm_res_splits import SPLIT_NAMES, load_residual_episode_split
 from starVLA.model.framework.VLM4A.MiniCPMGR00TRes import MiniCPMGR00TRes
 
 
@@ -44,6 +45,8 @@ def main() -> None:
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--episode-ids", default=None, help="optional comma-separated episode IDs for a controlled subset")
+    parser.add_argument("--split-manifest", type=Path, default=None)
+    parser.add_argument("--split", choices=SPLIT_NAMES, default=None)
     parser.add_argument("--control-steps", default=None, help="optional comma-separated control-step indices")
     parser.add_argument("--dry-run", action="store_true", help="Build data/model and run one loss/gradient step")
     args = parser.parse_args()
@@ -70,6 +73,19 @@ def main() -> None:
     episode_ids = (
         None if args.episode_ids is None else [item.strip() for item in args.episode_ids.split(",") if item.strip()]
     )
+    split_info = None
+    if args.split_manifest is not None or args.split is not None:
+        if args.split_manifest is None or args.split is None:
+            raise ValueError("--split-manifest and --split must be provided together")
+        if episode_ids is not None:
+            raise ValueError("--episode-ids cannot be combined with a frozen --split-manifest")
+        split_info = load_residual_episode_split(
+            args.split_manifest,
+            split=args.split,
+            success_terminal_manifest=dc.success_terminal_manifest,
+            dataset_path=Path(dc.data_root_dir) / dc.dataset_name,
+        )
+        episode_ids = split_info["episode_ids"]
     control_steps = (
         None
         if args.control_steps is None
@@ -116,6 +132,21 @@ def main() -> None:
     )
     output_dir = args.output_dir or Path(cfg.trainer.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    if split_info is not None:
+        split_provenance_path = output_dir / f"data_split_{split_info['split']}.json"
+        split_provenance = {
+            "split": split_info["split"],
+            "manifest_path": split_info["manifest_path"],
+            "manifest_sha256": split_info["manifest_sha256"],
+            "success_terminal_manifest_path": str(Path(dc.success_terminal_manifest).resolve()),
+            "episode_ids": split_info["episode_ids"],
+            "selected_control_steps": control_steps,
+            "dataset_path": str((Path(dc.data_root_dir) / dc.dataset_name).resolve()),
+        }
+        split_provenance_path.write_text(
+            json.dumps(split_provenance, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     max_steps = int(args.max_steps or cfg.trainer.max_train_steps)
     grad_accum = int(cfg.trainer.get("gradient_accumulation_steps", 1))
     if grad_accum < 1:

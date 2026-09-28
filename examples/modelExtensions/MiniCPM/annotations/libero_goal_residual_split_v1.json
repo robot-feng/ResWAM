@@ -1,0 +1,3517 @@
+{
+  "schema_version": 1,
+  "manifest_id": "libero_goal_terminal_residual_group_split_v1",
+  "seed": 20260929,
+  "dataset": {
+    "dataset_name": "libero_goal_no_noops_1.0.0_lerobot",
+    "metadata_file_sha256": {
+      "info.json": "c216f8c0e3a4675a4a4f68bacfaff89a995a53e2d11851f64dc0f2c71190997a",
+      "episodes.jsonl": "76c2bb48815d8c1f1f9c27f92f0307d7559dcf05c735df9035525fabe9c3c196",
+      "tasks.jsonl": "39f08f81b289ad3041f1c8ada88f679fe60774e9fde4083415881486edc23d55",
+      "modality.json": "89a88c62ed7746d7769d69b4bfde2d64bb5b7572b0657d15ca796dd4e99d5649",
+      "downsample.json": "9a29463bada33b728dfe84c055001649183133d0af48bbfe08c5a6b15f030187",
+      "stats_gr00t.json": "d6539b229699d0a8a29bfb8a7c8232fbf49db24c76eaa0d3a63a883cfc44c67f"
+    },
+    "metadata_manifest_sha256": "57ff27ab3a16784d988c2d188d4a32440580d112f30c37316560f1a356d0204a"
+  },
+  "success_terminal_source": {
+    "path": "examples/modelExtensions/MiniCPM/annotations/libero_goal_success_terminals.jsonl",
+    "sha256": "895028dab5a278a04ae81ac007608f52aba44b804a9fb86874e694b4df34573b"
+  },
+  "group_key": [
+    "task",
+    "provenance.source_file",
+    "provenance.source_demo"
+  ],
+  "allocation": {
+    "method": "deterministic task-stratified source-demo group assignment",
+    "target_fractions": {
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    },
+    "legacy_pilot_train_episode_ids_pinned": [
+      "0",
+      "1",
+      "3",
+      "6",
+      "7"
+    ],
+    "legacy_pilot_validation_episode_ids_pinned": [
+      "2",
+      "4",
+      "10",
+      "21",
+      "422"
+    ],
+    "legacy_validation_note": "These five episodes informed the earlier continuation decision; they remain validation and are not part of the untouched test split."
+  },
+  "counts": {
+    "dataset_episodes": 428,
+    "successful_episodes": 421,
+    "excluded_unlabeled_episodes": 7,
+    "source_demo_groups": 421,
+    "episodes_by_split": {
+      "train": 297,
+      "validation": 62,
+      "test": 62
+    },
+    "groups_by_split": {
+      "train": 297,
+      "validation": 62,
+      "test": 62
+    },
+    "episodes_by_task_and_split": {
+      "train": {
+        "open the middle drawer of the cabinet": 31,
+        "open the top drawer and put the bowl inside": 25,
+        "push the plate to the front of the stove": 23,
+        "put the bowl on the plate": 35,
+        "put the bowl on the stove": 33,
+        "put the bowl on top of the cabinet": 32,
+        "put the cream cheese in the bowl": 26,
+        "put the wine bottle on the rack": 26,
+        "put the wine bottle on top of the cabinet": 31,
+        "turn on the stove": 35
+      },
+      "validation": {
+        "open the middle drawer of the cabinet": 6,
+        "open the top drawer and put the bowl inside": 5,
+        "push the plate to the front of the stove": 5,
+        "put the bowl on the plate": 7,
+        "put the bowl on the stove": 7,
+        "put the bowl on top of the cabinet": 7,
+        "put the cream cheese in the bowl": 6,
+        "put the wine bottle on the rack": 5,
+        "put the wine bottle on top of the cabinet": 7,
+        "turn on the stove": 7
+      },
+      "test": {
+        "open the middle drawer of the cabinet": 6,
+        "open the top drawer and put the bowl inside": 5,
+        "push the plate to the front of the stove": 5,
+        "put the bowl on the plate": 7,
+        "put the bowl on the stove": 7,
+        "put the bowl on top of the cabinet": 7,
+        "put the cream cheese in the bowl": 6,
+        "put the wine bottle on the rack": 5,
+        "put the wine bottle on top of the cabinet": 7,
+        "turn on the stove": 7
+      }
+    }
+  },
+  "splits": {
+    "train": [
+      {
+        "episode_id": "20",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_30\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "26",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_0\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 68
+      },
+      {
+        "episode_id": "31",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_3\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 65
+      },
+      {
+        "episode_id": "42",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_41\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "58",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_4\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 70
+      },
+      {
+        "episode_id": "84",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_48\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 71
+      },
+      {
+        "episode_id": "90",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_15\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 69
+      },
+      {
+        "episode_id": "94",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_11\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "111",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_46\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 61
+      },
+      {
+        "episode_id": "117",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_38\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "118",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_13\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "137",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_23\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 68
+      },
+      {
+        "episode_id": "140",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_28\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 93
+      },
+      {
+        "episode_id": "146",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_29\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 72
+      },
+      {
+        "episode_id": "162",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_40\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 74
+      },
+      {
+        "episode_id": "168",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_45\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "173",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_7\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 69
+      },
+      {
+        "episode_id": "182",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_2\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 75
+      },
+      {
+        "episode_id": "187",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_47\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "206",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_10\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 64
+      },
+      {
+        "episode_id": "232",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_18\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "285",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_5\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 69
+      },
+      {
+        "episode_id": "293",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_31\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 97
+      },
+      {
+        "episode_id": "299",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_20\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 57
+      },
+      {
+        "episode_id": "308",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_26\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "343",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_21\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "346",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_49\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 64
+      },
+      {
+        "episode_id": "386",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_14\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "393",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_37\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 66
+      },
+      {
+        "episode_id": "413",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_9\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 78
+      },
+      {
+        "episode_id": "423",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_25\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 79
+      },
+      {
+        "episode_id": "3",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_17\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "8",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_28\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 134
+      },
+      {
+        "episode_id": "30",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_15\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 92
+      },
+      {
+        "episode_id": "70",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_16\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 124
+      },
+      {
+        "episode_id": "83",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_30\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 99
+      },
+      {
+        "episode_id": "86",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_36\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 113
+      },
+      {
+        "episode_id": "110",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_44\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 97
+      },
+      {
+        "episode_id": "119",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_13\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 94
+      },
+      {
+        "episode_id": "144",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_7\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 100
+      },
+      {
+        "episode_id": "147",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_6\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "169",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_35\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 92
+      },
+      {
+        "episode_id": "181",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_20\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "197",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_0\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "215",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_14\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "235",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_5\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 87
+      },
+      {
+        "episode_id": "245",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_38\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "248",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_8\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "305",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_39\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "322",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_34\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 98
+      },
+      {
+        "episode_id": "332",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_47\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 125
+      },
+      {
+        "episode_id": "358",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_43\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 96
+      },
+      {
+        "episode_id": "359",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_45\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 109
+      },
+      {
+        "episode_id": "379",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_49\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 104
+      },
+      {
+        "episode_id": "403",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_12\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 107
+      },
+      {
+        "episode_id": "405",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_19\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 97
+      },
+      {
+        "episode_id": "7",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_7\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 61
+      },
+      {
+        "episode_id": "32",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_4\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 96
+      },
+      {
+        "episode_id": "41",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_30\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 70
+      },
+      {
+        "episode_id": "46",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_6\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 76
+      },
+      {
+        "episode_id": "92",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_24\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "99",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_15\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "156",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_27\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 109
+      },
+      {
+        "episode_id": "174",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_11\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 71
+      },
+      {
+        "episode_id": "205",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_0\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "210",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_22\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 73
+      },
+      {
+        "episode_id": "214",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_18\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 83
+      },
+      {
+        "episode_id": "224",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_41\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 93
+      },
+      {
+        "episode_id": "227",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_33\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "301",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_14\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "306",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_12\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 70
+      },
+      {
+        "episode_id": "331",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_36\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 72
+      },
+      {
+        "episode_id": "334",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_8\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 69
+      },
+      {
+        "episode_id": "336",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_47\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 70
+      },
+      {
+        "episode_id": "365",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_9\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 72
+      },
+      {
+        "episode_id": "373",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_10\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 107
+      },
+      {
+        "episode_id": "390",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_21\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 74
+      },
+      {
+        "episode_id": "399",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_34\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 76
+      },
+      {
+        "episode_id": "402",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_2\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "0",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_10\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "43",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_27\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "47",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_42\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "54",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "69",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_7\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "72",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "80",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 41
+      },
+      {
+        "episode_id": "109",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_3\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "128",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "132",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_0\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "134",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_46\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "143",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 41
+      },
+      {
+        "episode_id": "153",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_12\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "158",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "170",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_29\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "172",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_4\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "203",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_22\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "228",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_30\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "236",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_36\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "241",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 41
+      },
+      {
+        "episode_id": "242",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_34\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "247",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_48\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "255",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_19\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "267",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "291",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_16\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "300",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_37\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "329",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_1\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "337",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "339",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "348",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_28\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "370",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 41
+      },
+      {
+        "episode_id": "389",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_17\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "391",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_20\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "424",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_31\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "427",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "15",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_12\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "16",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_27\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "36",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_0\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "45",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_48\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "66",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "116",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_35\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "121",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_21\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "145",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_28\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "171",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "178",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "179",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_37\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "186",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_26\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "201",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_29\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "219",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_1\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "233",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "237",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_16\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "239",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "250",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_24\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "258",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_36\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "262",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_46\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 59
+      },
+      {
+        "episode_id": "264",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "270",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_7\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "294",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 61
+      },
+      {
+        "episode_id": "309",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_17\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "312",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_3\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "328",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_22\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "361",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 57
+      },
+      {
+        "episode_id": "368",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "372",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_30\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "384",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "410",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "417",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_42\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "426",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "19",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_20\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "23",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "59",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_4\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "65",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "67",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_32\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "95",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_30\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "114",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_40\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "122",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_35\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "135",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "142",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "191",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_48\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "211",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_17\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "229",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "251",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_27\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "257",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_16\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "259",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "281",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "286",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_42\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "290",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_10\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "295",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "310",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_22\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "317",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "323",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_7\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "333",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "345",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "352",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_33\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "353",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "366",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "388",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "412",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_31\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "414",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "415",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_24\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "12",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_40\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "14",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "34",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_10\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "78",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_16\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "85",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "129",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "131",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_1\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "157",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_32\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "161",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_34\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "183",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_12\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "185",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "202",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_22\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "208",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_31\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "221",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "231",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "265",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "278",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "319",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "330",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "351",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_3\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "377",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "392",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "397",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_35\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "398",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_28\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "408",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_33\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "418",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_20\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "1",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "28",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_19\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "29",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "49",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_7\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "50",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 91
+      },
+      {
+        "episode_id": "88",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 83
+      },
+      {
+        "episode_id": "130",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 81
+      },
+      {
+        "episode_id": "138",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "160",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 89
+      },
+      {
+        "episode_id": "163",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 97
+      },
+      {
+        "episode_id": "192",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_30\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "200",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 85
+      },
+      {
+        "episode_id": "204",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_29\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 79
+      },
+      {
+        "episode_id": "207",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_36\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 76
+      },
+      {
+        "episode_id": "216",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_28\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "244",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 74
+      },
+      {
+        "episode_id": "272",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 100
+      },
+      {
+        "episode_id": "273",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_40\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "287",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 83
+      },
+      {
+        "episode_id": "292",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_26\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 75
+      },
+      {
+        "episode_id": "296",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_17\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 107
+      },
+      {
+        "episode_id": "304",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_4\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 78
+      },
+      {
+        "episode_id": "316",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_24\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 75
+      },
+      {
+        "episode_id": "360",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_22\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "394",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_21\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 76
+      },
+      {
+        "episode_id": "419",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 86
+      },
+      {
+        "episode_id": "6",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_12\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "17",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_7\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "18",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_35\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "25",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 57
+      },
+      {
+        "episode_id": "38",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "44",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_9\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "48",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_26\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "75",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 57
+      },
+      {
+        "episode_id": "89",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_16\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "91",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "96",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_37\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "97",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_32\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "133",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "136",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_29\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 72
+      },
+      {
+        "episode_id": "149",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "164",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_3\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 61
+      },
+      {
+        "episode_id": "167",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "176",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_1\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 64
+      },
+      {
+        "episode_id": "177",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_31\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "195",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_20\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "209",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_43\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "212",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "213",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_27\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "240",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_36\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "256",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_23\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 59
+      },
+      {
+        "episode_id": "269",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 64
+      },
+      {
+        "episode_id": "277",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "318",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_34\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 60
+      },
+      {
+        "episode_id": "387",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_24\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 60
+      },
+      {
+        "episode_id": "409",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_48\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "416",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_17\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "9",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_25\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "11",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_19\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 40
+      },
+      {
+        "episode_id": "33",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_44\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 59
+      },
+      {
+        "episode_id": "39",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_10\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "61",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_32\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "62",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_18\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 38
+      },
+      {
+        "episode_id": "74",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_37\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "98",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_6\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "107",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_42\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "120",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_43\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_43",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "125",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_34\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 37
+      },
+      {
+        "episode_id": "141",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_45\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "150",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_11\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "188",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_35\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "190",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_47\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 38
+      },
+      {
+        "episode_id": "193",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_30\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "196",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_9\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 38
+      },
+      {
+        "episode_id": "199",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_48\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_48",
+        "terminal_step": 40
+      },
+      {
+        "episode_id": "223",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_20\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "226",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_39\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "234",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_49\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "238",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_41\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "243",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_26\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "249",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_24\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "275",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_22\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "279",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_8\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "311",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_15\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "326",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_12\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "344",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_0\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 39
+      },
+      {
+        "episode_id": "349",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_5\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "357",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_13\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "367",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_2\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "404",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_3\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "406",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_46\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "420",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_1\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 47
+      }
+    ],
+    "validation": [
+      {
+        "episode_id": "198",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_1\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 68
+      },
+      {
+        "episode_id": "220",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_12\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 68
+      },
+      {
+        "episode_id": "254",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_24\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 76
+      },
+      {
+        "episode_id": "280",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_44\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "324",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_33\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 69
+      },
+      {
+        "episode_id": "400",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_36\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "4",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_22\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_22",
+        "terminal_step": 108
+      },
+      {
+        "episode_id": "37",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_3\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 99
+      },
+      {
+        "episode_id": "115",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_32\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 99
+      },
+      {
+        "episode_id": "155",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_25\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 93
+      },
+      {
+        "episode_id": "159",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_37\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 110
+      },
+      {
+        "episode_id": "21",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_46\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 68
+      },
+      {
+        "episode_id": "93",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_40\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "127",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_45\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 65
+      },
+      {
+        "episode_id": "376",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_5\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 58
+      },
+      {
+        "episode_id": "382",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_20\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 87
+      },
+      {
+        "episode_id": "52",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_21\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "87",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "184",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "189",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "276",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "347",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "422",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_32\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "13",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_38\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "165",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "166",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_34\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "225",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "313",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_10\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "325",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "342",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_33\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "77",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_49\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_49",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "79",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_0\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "126",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "194",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_28\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "218",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_29\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "222",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 59
+      },
+      {
+        "episode_id": "283",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_12\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_12",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "60",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_37\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "112",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_13\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_13",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "113",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "148",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "298",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_42\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 55
+      },
+      {
+        "episode_id": "335",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "2",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_6\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_6",
+        "terminal_step": 74
+      },
+      {
+        "episode_id": "106",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 99
+      },
+      {
+        "episode_id": "124",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_23\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 101
+      },
+      {
+        "episode_id": "340",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 94
+      },
+      {
+        "episode_id": "378",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 73
+      },
+      {
+        "episode_id": "10",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_19\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "40",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_11\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_11",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "51",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_21\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "53",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_10\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_10",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "101",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_40\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "289",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "307",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_33\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "27",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_36\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 41
+      },
+      {
+        "episode_id": "56",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_27\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "81",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_29\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "108",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_21\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "152",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_7\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_7",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "261",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_31\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 40
+      },
+      {
+        "episode_id": "395",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_28\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_28",
+        "terminal_step": 47
+      }
+    ],
+    "test": [
+      {
+        "episode_id": "64",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_35\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 71
+      },
+      {
+        "episode_id": "252",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_34\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_34",
+        "terminal_step": 70
+      },
+      {
+        "episode_id": "314",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_16\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 92
+      },
+      {
+        "episode_id": "355",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_27\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 77
+      },
+      {
+        "episode_id": "375",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_8\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 62
+      },
+      {
+        "episode_id": "401",
+        "task": "open the middle drawer of the cabinet",
+        "group_id": "[\"open the middle drawer of the cabinet\",\"open_the_middle_drawer_of_the_cabinet_demo.hdf5\",\"demo_39\"]",
+        "source_file": "open_the_middle_drawer_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 60
+      },
+      {
+        "episode_id": "180",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_18\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 90
+      },
+      {
+        "episode_id": "315",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_9\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_9",
+        "terminal_step": 86
+      },
+      {
+        "episode_id": "363",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_1\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_1",
+        "terminal_step": 93
+      },
+      {
+        "episode_id": "383",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_42\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_42",
+        "terminal_step": 100
+      },
+      {
+        "episode_id": "411",
+        "task": "open the top drawer and put the bowl inside",
+        "group_id": "[\"open the top drawer and put the bowl inside\",\"open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5\",\"demo_40\"]",
+        "source_file": "open_the_top_drawer_and_put_the_bowl_inside_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 93
+      },
+      {
+        "episode_id": "63",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_44\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 71
+      },
+      {
+        "episode_id": "82",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_23\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 64
+      },
+      {
+        "episode_id": "268",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_17\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 66
+      },
+      {
+        "episode_id": "284",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_29\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_29",
+        "terminal_step": 67
+      },
+      {
+        "episode_id": "354",
+        "task": "push the plate to the front of the stove",
+        "group_id": "[\"push the plate to the front of the stove\",\"push_the_plate_to_the_front_of_the_stove_demo.hdf5\",\"demo_19\"]",
+        "source_file": "push_the_plate_to_the_front_of_the_stove_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 81
+      },
+      {
+        "episode_id": "68",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_40\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "102",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_35\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_35",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "104",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_24\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_24",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "260",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_23\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 53
+      },
+      {
+        "episode_id": "263",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "274",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "371",
+        "task": "put the bowl on the plate",
+        "group_id": "[\"put the bowl on the plate\",\"put_the_bowl_on_the_plate_demo.hdf5\",\"demo_33\"]",
+        "source_file": "put_the_bowl_on_the_plate_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "22",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_18\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_18",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "76",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "151",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_19\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_19",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "297",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_4\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 51
+      },
+      {
+        "episode_id": "385",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_8\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_8",
+        "terminal_step": 50
+      },
+      {
+        "episode_id": "407",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_31\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_31",
+        "terminal_step": 56
+      },
+      {
+        "episode_id": "425",
+        "task": "put the bowl on the stove",
+        "group_id": "[\"put the bowl on the stove\",\"put_the_bowl_on_the_stove_demo.hdf5\",\"demo_32\"]",
+        "source_file": "put_the_bowl_on_the_stove_demo.hdf5",
+        "source_demo": "demo_32",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "73",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_45\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_45",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "282",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_21\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_21",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "302",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_23\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "320",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_36\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_36",
+        "terminal_step": 48
+      },
+      {
+        "episode_id": "327",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_3\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_3",
+        "terminal_step": 61
+      },
+      {
+        "episode_id": "364",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_37\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_37",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "396",
+        "task": "put the bowl on top of the cabinet",
+        "group_id": "[\"put the bowl on top of the cabinet\",\"put_the_bowl_on_top_of_the_cabinet_demo.hdf5\",\"demo_26\"]",
+        "source_file": "put_the_bowl_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 46
+      },
+      {
+        "episode_id": "55",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_25\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_25",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "139",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_46\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "253",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 65
+      },
+      {
+        "episode_id": "271",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_26\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_26",
+        "terminal_step": 73
+      },
+      {
+        "episode_id": "369",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_0\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_0",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "381",
+        "task": "put the cream cheese in the bowl",
+        "group_id": "[\"put the cream cheese in the bowl\",\"put_the_cream_cheese_in_the_bowl_demo.hdf5\",\"demo_47\"]",
+        "source_file": "put_the_cream_cheese_in_the_bowl_demo.hdf5",
+        "source_demo": "demo_47",
+        "terminal_step": 54
+      },
+      {
+        "episode_id": "24",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_27\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_27",
+        "terminal_step": 88
+      },
+      {
+        "episode_id": "105",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_39\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_39",
+        "terminal_step": 81
+      },
+      {
+        "episode_id": "123",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_5\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_5",
+        "terminal_step": 84
+      },
+      {
+        "episode_id": "246",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_20\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_20",
+        "terminal_step": 90
+      },
+      {
+        "episode_id": "288",
+        "task": "put the wine bottle on the rack",
+        "group_id": "[\"put the wine bottle on the rack\",\"put_the_wine_bottle_on_the_rack_demo.hdf5\",\"demo_46\"]",
+        "source_file": "put_the_wine_bottle_on_the_rack_demo.hdf5",
+        "source_demo": "demo_46",
+        "terminal_step": 126
+      },
+      {
+        "episode_id": "57",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_4\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_4",
+        "terminal_step": 52
+      },
+      {
+        "episode_id": "100",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_2\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_2",
+        "terminal_step": 43
+      },
+      {
+        "episode_id": "175",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_41\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_41",
+        "terminal_step": 63
+      },
+      {
+        "episode_id": "217",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_14\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "266",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_44\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_44",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "303",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_30\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_30",
+        "terminal_step": 49
+      },
+      {
+        "episode_id": "356",
+        "task": "put the wine bottle on top of the cabinet",
+        "group_id": "[\"put the wine bottle on top of the cabinet\",\"put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5\",\"demo_15\"]",
+        "source_file": "put_the_wine_bottle_on_top_of_the_cabinet_demo.hdf5",
+        "source_demo": "demo_15",
+        "terminal_step": 57
+      },
+      {
+        "episode_id": "230",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_38\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_38",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "321",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_16\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_16",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "338",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_17\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_17",
+        "terminal_step": 42
+      },
+      {
+        "episode_id": "350",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_23\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_23",
+        "terminal_step": 45
+      },
+      {
+        "episode_id": "374",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_14\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_14",
+        "terminal_step": 44
+      },
+      {
+        "episode_id": "380",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_40\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_40",
+        "terminal_step": 47
+      },
+      {
+        "episode_id": "421",
+        "task": "turn on the stove",
+        "group_id": "[\"turn on the stove\",\"turn_on_the_stove_demo.hdf5\",\"demo_33\"]",
+        "source_file": "turn_on_the_stove_demo.hdf5",
+        "source_demo": "demo_33",
+        "terminal_step": 39
+      }
+    ]
+  },
+  "excluded_unlabeled_episodes": [
+    {
+      "episode_id": "5",
+      "task": "put the cream cheese in the bowl",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "35",
+      "task": "open the top drawer and put the bowl inside",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "71",
+      "task": "turn on the stove",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "103",
+      "task": "put the wine bottle on top of the cabinet",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "154",
+      "task": "put the wine bottle on top of the cabinet",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "341",
+      "task": "put the cream cheese in the bowl",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    },
+    {
+      "episode_id": "362",
+      "task": "put the bowl on the stove",
+      "reason": "no unique exact ordered source-action alignment; success label withheld"
+    }
+  ],
+  "manifest_sha256": "310acc6c1f06ee4bca7ae9968ad127f90dfebb14f98a56d7d9bd367071711a1a"
+}

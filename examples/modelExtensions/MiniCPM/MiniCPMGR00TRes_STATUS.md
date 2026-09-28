@@ -1,6 +1,6 @@
 # MiniCPMGR00TRes implementation status
 
-Status date: 2026-09-28. This is an engineering smoke report, not an algorithm
+Status date: 2026-09-29. This is an engineering smoke report, not an algorithm
 effectiveness claim.
 
 ## Implemented
@@ -146,6 +146,30 @@ effectiveness claim.
   representation improvement. See `MiniCPMGR00TRes_ABLATION.md` for the full
   comparison and limitations; raw evaluation JSON and checkpoints are in
   `/data/tzq/tmp/reswam_ablation_20260928`, outside the repository.
+
+## Frozen Stage 3 split and pipeline smoke (2026-09-29)
+
+- Froze `annotations/libero_goal_residual_split_v1.json`, SHA-256
+  `310acc6c1f06ee4bca7ae9968ad127f90dfebb14f98a56d7d9bd367071711a1a`.
+  Its task-stratified source-demo group split contains 297 train, 62 validation,
+  and 62 test episodes. Of 428 episodes, 421 have explicit successful terminal
+  labels and seven ambiguous episodes are excluded. The old pilot train IDs
+  (`0,1,3,6,7`) remain train; the five episodes used in the earlier continuation
+  decision (`2,4,10,21,422`) remain validation. Split, annotation, and dataset
+  metadata hashes and cross-split group disjointness verified successfully.
+- Ran three optimizer updates from the frozen train split at control step 8 on
+  one A100. Residual losses were `2.6361`, `2.0498`, and `2.6789`; text loss was
+  disabled because no assistant-answer labels exist. Peak allocated GPU memory
+  was about 10.6 GiB. This confirms the split-aware training path runs, not that
+  training improved the model.
+- Evaluated four validation samples at control step 8 (episodes `2,4,10,13`).
+  Mean residual MSE was `1.9642` versus `1.8529` for zero residual, so this
+  three-update checkpoint did not beat the baseline on this tiny sample. The
+  evaluation was only a pipeline check; it did not drive tuning or continuation.
+  Episodes `2,4,10` were already part of the earlier validation pilot and remain
+  validation. No test video frames were decoded or used for training/evaluation.
+- Checkpoint, logs, and validation JSON are under the ignored
+  `playground/Checkpoints/libero_minicpm_stage3_split_pilot/` directory.
 
 ## Not yet verified
 

@@ -14,6 +14,7 @@ from omegaconf import OmegaConf
 from PIL import Image
 
 from starVLA.dataloader.minicpm_res_lerobot import MiniCPMResidualLeRobotDataset
+from starVLA.dataloader.minicpm_res_splits import SPLIT_NAMES, load_residual_episode_split
 from starVLA.model.framework.VLM4A.MiniCPMGR00TRes import MiniCPMGR00TRes
 from starVLA.model.framework.VLM4A.minicpm_video_history import gather_token_hidden_states
 
@@ -43,6 +44,8 @@ def main() -> None:
     parser.add_argument(
         "--episode-ids", default=None, help="optional comma-separated episode IDs for a held-out split"
     )
+    parser.add_argument("--split-manifest", type=Path, default=None)
+    parser.add_argument("--split", choices=SPLIT_NAMES, default=None)
     parser.add_argument("--control-steps", default=None, help="optional comma-separated control-step indices")
     parser.add_argument("--profile-history-lengths", default="1,8,32,all")
     parser.add_argument(
@@ -58,6 +61,19 @@ def main() -> None:
     episode_ids = (
         None if args.episode_ids is None else [item.strip() for item in args.episode_ids.split(",") if item.strip()]
     )
+    split_info = None
+    if args.split_manifest is not None or args.split is not None:
+        if args.split_manifest is None or args.split is None:
+            raise ValueError("--split-manifest and --split must be provided together")
+        if episode_ids is not None:
+            raise ValueError("--episode-ids cannot be combined with a frozen --split-manifest")
+        split_info = load_residual_episode_split(
+            args.split_manifest,
+            split=args.split,
+            success_terminal_manifest=dataset_cfg.success_terminal_manifest,
+            dataset_path=Path(dataset_cfg.data_root_dir) / dataset_cfg.dataset_name,
+        )
+        episode_ids = split_info["episode_ids"]
     control_steps = (
         None
         if args.control_steps is None
@@ -96,6 +112,16 @@ def main() -> None:
         "mask_history_frame": args.mask_history_frame,
         "vlm_refresh_interval": model.vlm_refresh_interval,
         "action_horizon": "owned by downstream action policy; not consumed here",
+        "data_split": (
+            {
+                "split": split_info["split"],
+                "manifest_path": split_info["manifest_path"],
+                "manifest_sha256": split_info["manifest_sha256"],
+                "episode_ids": split_info["episode_ids"],
+            }
+            if split_info is not None
+            else None
+        ),
         "device": str(device),
         "history_profiles": [],
     }

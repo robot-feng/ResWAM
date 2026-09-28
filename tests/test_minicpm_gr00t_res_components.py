@@ -147,21 +147,21 @@ def test_vlm_refresh_interval_is_independent_of_action_horizon():
     )
     assert async_cfg.framework.action_model.action_horizon == 3
     assert async_cfg.framework.vlm_refresh_interval == 8
-    async_cfg = _asy_config(
-        {"framework": {"action_model": {"action_horizon": 3, "execution_horizon": 5}}}
-    )
-    assert async_cfg.framework.vlm_refresh_interval == 8
-    assert async_cfg.framework.action_model.execution_horizon == 5
+    # The current MiniCPM DualAsy pilot does not implement a configurable
+    # execution horizon. Its evaluator commits chunk[0] and requests a new
+    # action on the next control step, so do not treat an ignored config key
+    # as proof that action execution length is configurable.
+    assert "execution_horizon" not in async_cfg.framework.action_model
     explicit_cfg = _asy_config(
         {
             "framework": {
                 "vlm_refresh_interval": 2,
-                "action_model": {"action_horizon": 3, "execution_horizon": 5},
+                "action_model": {"action_horizon": 3},
             }
         }
     )
     assert explicit_cfg.framework.vlm_refresh_interval == 2
-    assert explicit_cfg.framework.action_model.execution_horizon == 5
+    assert explicit_cfg.framework.action_model.action_horizon == 3
 
     with pytest.raises(ValueError, match="controls action execution, not VLM refresh"):
         _as_config({"framework": {"runtime": {"execution_horizon": 6}}})

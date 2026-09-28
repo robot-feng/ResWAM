@@ -112,13 +112,15 @@ effectiveness claim.
   residual/total loss `2.7029`, gradient norm `34.85`, text supervision off,
   and peak allocated CUDA memory `8,856,342,016` bytes. The checkpoint restored
   its expanded tokenizer and model metadata.
-- Latest tests were run from `/tmp` against the editable package:
-  `tests/test_minicpm_gr00t_res_components.py` and
-  `tests/test_minicpm_gr00t_dual.py` passed (`16 passed, 3 warnings`). The new
-  CPU target test checks `z_goal-z_current`, exact zero residual at the terminal
-  frame, and that the future image is absent from the VLM history. Python
-  `compileall` for changed modules and `git diff --check` passed. Current diff
-  does not modify `MiniCPMGR00T.py`, `QwenDual.py`, or `QwenOFT.py`.
+- Latest tests were run in Conda environment `ResWAM` against the editable
+  checkout: `tests/test_minicpm_gr00t_res_components.py` and
+  `tests/test_minicpm_gr00t_dual.py` passed (`18 passed, 3 warnings`). The CPU
+  target test checks `z_goal-z_current`, exact zero residual at the terminal
+  frame, and that the future image is absent from the VLM history. The horizon
+  config test verifies that action prediction length and VLM refresh cadence are
+  independent; it does not claim that MiniCPM DualAsy has a configurable action
+  execution horizon. `git diff --check` passed. Current changes do not modify
+  `MiniCPMGR00T.py`, `QwenDual.py`, or `QwenOFT.py`.
 - A small labeled LIBERO ablation used episodes `0,1,3,6,7` for training and
   `2,4,10,21,422` for evaluation, with one sample per episode at
   control step 8. Every full-history sample contained nine frames. Each

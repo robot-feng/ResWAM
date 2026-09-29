@@ -35,14 +35,40 @@ def save_dataset_statistics(dataset_statistics, run_dir):
 
 def build_dataloader(cfg, dataset_py="lerobot_datasets_oxe"): # TODO now here only is get dataset, we need mv dataloader to here
 
+    framework_cfg = getattr(cfg, "framework", None)
+    if (
+        framework_cfg is not None
+        and framework_cfg.get("name") == "MiniCPMGR00TDualAsy"
+        and dataset_py != "lerobot_datasets"
+    ):
+        raise ValueError(
+            "MiniCPMGR00TDualAsy offline anchor alignment currently requires "
+            "datasets.vla_data.dataset_py=lerobot_datasets"
+        )
+
     if dataset_py == "lerobot_datasets":
         from starVLA.dataloader.lerobot_datasets import get_vla_dataset, collate_fn
         vla_dataset_cfg = cfg.datasets.vla_data
+
+        async_alignment = None
+        if framework_cfg is not None and framework_cfg.get("name") == "MiniCPMGR00TDualAsy":
+            from starVLA.dataloader.minicpm_asy_temporal_sampler import (
+                resolve_async_training_alignment,
+            )
+
+            async_alignment = resolve_async_training_alignment(framework_cfg)
+            logger.info(
+                "Using MiniCPM DualAsy LeRobot temporal alignment: "
+                f"mode={async_alignment['mode']} "
+                f"M={async_alignment['refresh_interval']} "
+                f"trace={async_alignment['trace_path']}"
+            )
 
         vla_dataset = get_vla_dataset(
             data_cfg=vla_dataset_cfg,
             balance_dataset_weights=vla_dataset_cfg.get("balance_dataset_weights", False),
             balance_trajectory_weights=vla_dataset_cfg.get("balance_trajectory_weights", False),
+            async_alignment=async_alignment,
         )
         num_workers = int(vla_dataset_cfg.get("num_workers", 4))
         dataloader_kwargs = {

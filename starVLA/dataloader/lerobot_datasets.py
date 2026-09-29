@@ -85,6 +85,7 @@ def get_vla_dataset(
     """
     Get a LeRobotMixtureDataset object.
     """
+    async_alignment = kwargs.pop("async_alignment", None)
     data_root_dir = data_cfg.data_root_dir
     data_mix = data_cfg.data_mix
     delete_pause_frame = data_cfg.get("delete_pause_frame", False)
@@ -102,7 +103,27 @@ def get_vla_dataset(
 
     dataset_mixture = []
     for d_name, d_weight, robot_type in filtered_mixture_spec:
-        dataset_mixture.append((make_LeRobotSingleDataset(Path(data_root_dir), d_name, robot_type, delete_pause_frame=delete_pause_frame, data_cfg=data_cfg), d_weight))
+        dataset = make_LeRobotSingleDataset(
+            Path(data_root_dir),
+            d_name,
+            robot_type,
+            delete_pause_frame=delete_pause_frame,
+            data_cfg=data_cfg,
+        )
+        if async_alignment is not None:
+            if not hasattr(dataset, "set_async_temporal_sampler"):
+                raise TypeError(
+                    "async temporal alignment requires a LeRobot dataset exposing "
+                    "set_async_temporal_sampler()"
+                )
+            from starVLA.dataloader.minicpm_asy_temporal_sampler import (
+                MiniCPMAsyncTemporalSampler,
+            )
+
+            dataset.set_async_temporal_sampler(
+                MiniCPMAsyncTemporalSampler(async_alignment)
+            )
+        dataset_mixture.append((dataset, d_weight))
 
     return LeRobotMixtureDataset(
         dataset_mixture,

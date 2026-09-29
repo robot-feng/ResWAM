@@ -60,6 +60,7 @@ def _asy_config(config):
     cfg.framework.async_alignment.setdefault("mode", "wall_clock")
     cfg.framework.async_alignment.setdefault("fixed_latency_steps", None)
     cfg.framework.async_alignment.setdefault("trace_path", None)
+    cfg.framework.async_alignment.setdefault("training_trace_path", None)
     cfg.framework.async_alignment.setdefault("trace_max_control_step", None)
     if cfg.framework.get("vlm_refresh_interval") is None:
         cfg.framework.vlm_refresh_interval = 8

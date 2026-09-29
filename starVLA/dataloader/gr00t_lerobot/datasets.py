@@ -631,6 +631,7 @@ class LeRobotSingleDataset(Dataset):
         # self._episodes = self._get_episode_info() # TODO why we need this func
         self.curr_traj_data = None
         self.curr_traj_id = None
+        self._async_temporal_sampler = None
 
         self._trajectory_ids, self._trajectory_lengths = self._get_trajectories()
         self._modality_keys = self._get_modality_keys()
@@ -1374,7 +1375,31 @@ class LeRobotSingleDataset(Dataset):
         trajectory_id, base_index = self.all_steps[index]
         raw_data = self.get_step_data(trajectory_id, base_index)
         data = self.transforms(raw_data)
-        return self._pack_sample(data)
+        sample = self._pack_sample(data)
+        return self._apply_async_temporal_alignment(sample, trajectory_id, base_index)
+
+    def set_async_temporal_sampler(self, sampler) -> None:
+        """Opt this LeRobot dataset into MiniCPM DualAsy temporal alignment."""
+        self._async_temporal_sampler = sampler
+
+    def _apply_async_temporal_alignment(
+        self, sample: dict, trajectory_id: int, control_step: int
+    ) -> dict:
+        sampler = getattr(self, "_async_temporal_sampler", None)
+        if sampler is None:
+            return sample
+
+        def load_anchor_images(source_step: int):
+            anchor_raw = self.get_step_data(trajectory_id, source_step)
+            anchor_data = self.transforms(anchor_raw)
+            return self._pack_sample(anchor_data)["image"]
+
+        return sampler.align_sample(
+            sample,
+            control_step=control_step,
+            load_anchor_images=load_anchor_images,
+            cache_key=(str(self.dataset_path), int(trajectory_id)),
+        )
 
     def _pack_sample(self, data: dict) -> dict:
         """Pack transformed modality data into training sample format."""
@@ -2456,6 +2481,10 @@ class LeRobotMixtureDataset(Dataset):
                 raw_data = dataset.get_step_data(trajectory_id, step)    
                 data = dataset.transforms(raw_data)
                 sample = dataset._pack_sample(data)
+                if hasattr(dataset, "_apply_async_temporal_alignment"):
+                    sample = dataset._apply_async_temporal_alignment(
+                        sample, trajectory_id, step
+                    )
                 
                 return sample
                 

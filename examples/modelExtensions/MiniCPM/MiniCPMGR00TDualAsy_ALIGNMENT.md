@@ -1,6 +1,6 @@
 # MiniCPMGR00TDualAsy training and inference alignment
 
-Status date: 2026-09-28. This is a single-task engineering pilot, not a policy
+Status date: 2026-09-29. This is a single-task engineering pilot, not a policy
 quality or success-rate evaluation.
 
 ## Keep four quantities separate
@@ -8,9 +8,9 @@ quality or success-rate evaluation.
 - `H = action_model.action_horizon`: number of future actions the head predicts
   in one call. The pilot uses `H=8`.
 - `K = execution_horizon`: number of predicted actions the controller commits
-  before asking the policy for another chunk. The LIBERO dual pilot currently
-  fixes `K=1` and executes the first row. Other evaluators may choose another
-  `K`; it is not a property of the action head.
+  before asking the policy for another chunk. Historical runs in this report
+  used `K=1`; the LIBERO evaluator now exposes `--execution-horizon K`. It is
+  not a property of the action head.
 - `M = framework.vlm_refresh_interval`: control steps between upper VLM image
   refresh requests. The pilot defaults to `M=8`.
 - `L`: actual VLM delivery delay, measured from request to the first control
@@ -100,9 +100,14 @@ trace analysis.
 
 ## Current limits
 
-- General LeRobot training still needs a reusable temporal sampler that emits
-  aligned `vlm_image` and source-step metadata; the explicit modes currently
-  live in the small LIBERO pilot.
+- The reusable LeRobot sampler currently targets `dataset_py=lerobot_datasets`
+  and K=1. It emits `vlm_image` plus source/request/activation/age metadata;
+  K>1 training requires sampling only at policy-call boundaries and currently
+  fails closed.
+- Wall-clock offline training requires `framework.async_alignment.training_trace_path`.
+  The trace must cover every episode-local sample step; a short pilot trace is
+  only suitable for bounded smoke runs. Fixed-delay training can cover arbitrary
+  episode lengths.
 - The recorded rollout is one task and one seed, did not succeed, and does not
   establish an asynchronous policy improvement.
 - The LIBERO evaluator accepts `--execution-horizon K` independently of H, M,
@@ -128,10 +133,10 @@ Protocol:
 - All runs used `H=8` actions predicted per call and `K=1` action executed per
   control step. The DualAsy run additionally used `M=8` and controlled
   `L=4`, in both training-anchor construction and runtime scheduling.
-- The evaluator still fixes `K=1`; it selects the first action from the
-  8-action chunk, executes it, then requests the next chunk. `H`, `K`, `M`, and
-  `L` are separately recorded; equal numeric values in another configuration
-  would not make these horizons interchangeable.
+- This run used `K=1`; it selected the first action from the 8-action chunk,
+  executed it, then requested the next chunk. The evaluator now accepts K
+  separately; equal numeric values for H, K, or M do not make them
+  interchangeable.
 
 | Variant | H / K / M / L | Action loss, update 1 → 16 | Held-out loss | Rollout | Mean / p95 policy RTT |
 |---|---:|---:|---|---|---:|
@@ -196,3 +201,48 @@ policy quality. The controlled schedule also waits at eligible policy-call
 boundaries; it is not a live wall-clock latency benchmark. Full traces,
 provenance, trainable checkpoints, and videos are under
 `playground/Checkpoints/libero_minicpm_pilot/stage2_k_sweep_20260929/`.
+
+## Trace-aligned wall-clock and LeRobot sampler (2026-09-29)
+
+A new 24-control-step K=1 wall-clock run was trained from the earlier
+56-step wall-clock trace, then a second run replayed its newly recorded trace
+for both training anchors and runtime activation. The new observed schedule
+was `{0: 0, 8: 11, 16: 20}`. Under the earlier trace, source 16 would have been
+used at step 19; it was used at step 20 in the new run, showing that the
+schedule changes with runtime load. Of the 24 current frames, 23 matched the
+old trace and step 19 differed. The selected training frames `[8, 9, 16, 17]`
+retained the same anchors under both traces: `[0, 0, 8, 8]`.
+
+Using the fresh trace for both training and `trace_replay` runtime matched the
+actual `cached_vlm_step` on all 24/24 control steps. Replay activation events
+were exactly `(0,0)`, `(8,11)`, `(16,20)`. The replay evaluator waited at those
+scheduled activation boundaries as designed.
+
+In the corresponding live wall-clock run, MiniCPM refresh compute took
+`0.672–0.958 s` for the later refreshes, while post-bootstrap policy round-trip
+time averaged `0.156 s` and peaked at `0.265 s`. The initial bootstrap call took
+about `1.06 s` and is awaited by design. This small run is consistent with the
+fast action path continuing while later VLM work runs; it is a single-device,
+single-task timing sample, not a general latency guarantee. The rollout failed
+at 24 steps.
+
+The shared `MiniCPMAsyncTemporalSampler` is now used by both the LIBERO pilot
+and the normal LeRobot single/mixture dataset path. It preserves current
+`image` and `action`, loads the source image from the same episode, applies the
+same transform/packing path, and adds `vlm_source_step`, `vlm_request_step`,
+`vlm_activation_step`, `vlm_current_step`, `vlm_age_steps`, and delivery delay.
+The sampler is opt-in and is enabled by `MiniCPMGR00TDualAsy` framework config;
+wall-clock mode requires an explicit `training_trace_path`, rejects samples
+beyond trace coverage, and trace-replay mode rejects different training and
+runtime traces. Other frameworks keep the normal LeRobot sample format.
+
+An end-to-end real LIBERO Goal dataloader smoke forced episode 0, step 13 and
+produced source step 8, activation step 11, age 5, with two current and two VLM
+views and the original 8×7 action chunk. The same source-image path was also
+verified with controlled `M=8, L=4`, yielding source 8 / activation 12. Unit
+coverage checks trace coverage, same-episode isolation, unchanged current
+observation/action, fixed-delay boundaries, wall-clock trace requirements,
+and LeRobot mixture wiring. The MiniCPM test suite currently passes all 85
+tests (with 3 dependency warnings). Pilot outputs are under
+`playground/Checkpoints/libero_minicpm_pilot/stage2_trace_wallclock_20260929/`
+and `playground/Checkpoints/libero_minicpm_pilot/stage2_trace_replay_20260929/`.

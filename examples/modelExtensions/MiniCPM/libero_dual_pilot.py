@@ -43,6 +43,9 @@ from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
     load_trace_max_control_step,
     source_step_at,
 )
+from starVLA.dataloader.minicpm_asy_temporal_sampler import (
+    MiniCPMAsyncTemporalSampler,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_DATA_ROOT = pathlib.Path("/data/tzq/datasets/starVLA/Datasets/libero_10hz")
@@ -296,12 +299,18 @@ def _resolve_async_alignment(
         if runtime_mode == "trace_replay"
         else None
     )
+    training_trace_max_control_step = (
+        load_trace_max_control_step(training_trace_path)
+        if training_mode == "trace_replay"
+        else None
+    )
     return {
         "runtime_mode": runtime_mode,
         "training_mode": training_mode,
         "fixed_latency_steps": fixed_latency,
         "runtime_trace_path": runtime_trace_path,
         "training_trace_path": training_trace_path,
+        "training_trace_max_control_step": training_trace_max_control_step,
         "runtime_trace_max_control_step": runtime_trace_max_control_step,
         "trace_activation_steps": trace_events,
     }
@@ -375,28 +384,31 @@ def _build_examples(
     alignment_mode=None,
     fixed_latency_steps=None,
     trace_activation_steps=None,
+    trace_max_control_step=None,
 ):
     examples = []
+    sampler = None
+    if asynchronous:
+        if alignment_mode is None:
+            raise ValueError("asynchronous training requires an explicit alignment_mode")
+        sampler = MiniCPMAsyncTemporalSampler(
+            {
+                "mode": alignment_mode,
+                "refresh_interval": vlm_refresh_interval,
+                "fixed_latency_steps": fixed_latency_steps,
+                "trace_activation_steps": trace_activation_steps,
+                "trace_max_control_step": trace_max_control_step,
+            }
+        )
     for frame_id in frame_ids:
         example = copy.deepcopy(dataset[frame_id])
         if asynchronous:
-            if alignment_mode is None:
-                raise ValueError("asynchronous training requires an explicit alignment_mode")
-            if alignment_mode == "fixed_step_delay" and fixed_latency_steps is None:
-                raise ValueError(
-                    "fixed_step_delay training requires explicit fixed_latency_steps"
-                )
-            anchor_id = source_step_at(
-                frame_id,
-                mode=alignment_mode,
-                refresh_interval=vlm_refresh_interval,
-                fixed_latency_steps=(
-                    fixed_latency_steps if alignment_mode == "fixed_step_delay" else None
-                ),
-                trace_activation_steps=trace_activation_steps,
+            example = sampler.align_sample(
+                example,
+                control_step=frame_id,
+                load_anchor_images=lambda anchor_id: dataset[anchor_id]["image"],
+                cache_key="pilot_episode_0",
             )
-            example["vlm_image"] = copy.deepcopy(dataset[anchor_id]["image"])
-            example["vlm_anchor_frame"] = anchor_id
         examples.append(example)
     return examples
 
@@ -699,6 +711,7 @@ def main():
             alignment_mode=training_alignment,
             fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
+            trace_max_control_step=alignment["training_trace_max_control_step"],
         )
         heldout = _build_examples(
             dataset,
@@ -708,6 +721,7 @@ def main():
             alignment_mode=training_alignment,
             fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
+            trace_max_control_step=alignment["training_trace_max_control_step"],
         )[0]
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"

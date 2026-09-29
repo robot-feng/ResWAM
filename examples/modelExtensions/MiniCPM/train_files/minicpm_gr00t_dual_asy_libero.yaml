@@ -50,6 +50,9 @@ framework:
     mode: wall_clock
     fixed_latency_steps: null
     trace_path: null
+    # Required for offline LeRobot anchors when mode=wall_clock. Set this to a
+    # prior rollout comparison.json; dataset sampling replays its exact source schedule.
+    training_trace_path: null
   reduce_in_full_precision: true
 
 datasets:

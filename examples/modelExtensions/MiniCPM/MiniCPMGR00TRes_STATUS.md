@@ -171,6 +171,26 @@ effectiveness claim.
 - Checkpoint, logs, and validation JSON are under the ignored
   `playground/Checkpoints/libero_minicpm_stage3_split_pilot/` directory.
 
+## Short-budget target-formulation pilot (2026-09-29)
+
+- With the frozen split, ran paired current-only residual and absolute-goal
+  training for 24 updates each at seeds 42 and 43. Configs differ only in
+  `prediction_target`; validation uses all 62 frozen validation episodes at
+  control step 8. Test remains untouched.
+- Mean goal-space MSE was 2.2552 for residual, 4.7832 for absolute goal,
+  2.2383 for zero residual, 1.8147 for the train-only global-mean residual,
+  and 0.9621 for the train-only task-mean residual. Thus this short pilot does
+  not show learned terminal representation beating simple baselines. It is a
+  diagnostic result, not a rejection of residual targets or a formal Stage
+  3-A conclusion.
+- The 24-update runs sampled only 24 of 297 train episodes per seed and used
+  one current-frame position, two seeds, and no text labels. A larger matched
+  run with multiple positions and at least three seeds is still required;
+  validation may guide settings, while the frozen test must remain unopened
+  until the experiment is locked.
+- Full protocol, per-seed numbers, caveats, and ignored artifact path are in
+  [`MiniCPMGR00TRes_TARGET_FORMULATION_PILOT_20260929.md`](MiniCPMGR00TRes_TARGET_FORMULATION_PILOT_20260929.md).
+
 ## Not yet verified
 
 - Joint text-plus-residual training has not been run because there is no

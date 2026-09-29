@@ -306,3 +306,18 @@ latency averaged `0.0168 s` with p95 `0.0238 s`. Action policy round trip was
 failed, so this remains timing and alignment evidence. Its clean provenance
 and artifacts are under
 `playground/Checkpoints/libero_minicpm_pilot/stage2_k4_m2_trace_replay_df93ce1_20260929/`.
+
+## 30K paired training and wall-clock evaluation boundary (2026-09-29)
+
+The current all-task comparison trains the synchronous `MiniCPMGR00TDual`
+baseline alongside `MiniCPMGR00TDualAsy`. DualAsy training uses the controlled
+`fixed_step_delay` schedule with `M=8` and `L=4`; the all-task evaluator
+deliberately overrides this to nonblocking `wall_clock` mode. This is a useful
+fixed-delay-to-live-runtime transfer test, but it is **not** a strict
+training/runtime trace-replay match. Interpret its results as live-runtime
+robustness for a model trained under fixed delay. For a trace-aligned
+performance claim, capture the trained model's wall-clock activation trace and
+evaluate the same checkpoint again under `trace_replay`, or train with a
+predeclared representative trace and replay that exact trace in evaluation.
+The current launch uses one seed and one initial state per task, so it remains
+an initial comparison rather than a statistically robust success-rate study.

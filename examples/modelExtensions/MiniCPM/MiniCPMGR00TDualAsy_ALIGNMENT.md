@@ -289,3 +289,14 @@ artifacts are under `playground/Checkpoints/libero_minicpm_pilot/` in
 `stage2_k4_m2_observe_20260929/`,
 `stage2_k4_m2_wallclock_v1_20260929/`, and
 `stage2_k4_m2_trace_replay_20260929/`.
+
+After committing the K/M decoupling as `df93ce1`, a final clean-worktree
+trace-replay run matched the input wall-clock trace at all 12 control steps.
+Its training anchors `[0, 0]` and held-out step-8 source `2` matched runtime
+policy calls at steps `[0, 4, 8]`, whose active sources were `[0, 0, 2]`. The
+run sent 9 intermediate observation updates for 3 action calls; observer RPC
+latency averaged `0.0168 s` with p95 `0.0238 s`. Action policy round trip was
+`0.569 s` mean / `0.847 s` p95, including the awaited bootstrap. The rollout
+failed, so this remains timing and alignment evidence. Its clean provenance
+and artifacts are under
+`playground/Checkpoints/libero_minicpm_pilot/stage2_k4_m2_trace_replay_df93ce1_20260929/`.

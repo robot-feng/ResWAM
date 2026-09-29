@@ -16,10 +16,7 @@ import time
 import torch
 from omegaconf import OmegaConf
 
-from examples.modelExtensions.MiniCPM.libero_dual_pilot import (
-    DEFAULT_DATA_ROOT,
-    _serve_and_simulate,
-)
+from libero_dual_pilot import DEFAULT_DATA_ROOT, _serve_and_simulate
 from starVLA.model.framework.base_framework import build_framework
 
 

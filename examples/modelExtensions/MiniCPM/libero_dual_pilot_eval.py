@@ -24,19 +24,29 @@ from PIL import Image
 PILOT_EXECUTION_HORIZON = 1
 
 
-def _select_executed_action(normalized_actions: np.ndarray) -> np.ndarray:
-    """Select the evaluator's one committed action from a predicted chunk."""
+def _select_executed_actions(
+    normalized_actions: np.ndarray,
+    execution_horizon: int = PILOT_EXECUTION_HORIZON,
+) -> np.ndarray:
+    """Select the first K actions committed by the controller from a chunk."""
+    execution_horizon = int(execution_horizon)
+    if execution_horizon < 1:
+        raise ValueError("execution_horizon must be >= 1")
     chunk = np.asarray(normalized_actions, dtype=np.float32)
     if chunk.ndim == 1:
-        return chunk
+        if execution_horizon != 1:
+            raise ValueError(
+                f"policy returned one action, but execution_horizon={execution_horizon}"
+            )
+        return chunk[None, :]
     if chunk.ndim != 2:
         raise ValueError(f"expected an action or action chunk; got shape {chunk.shape}")
-    if chunk.shape[0] < PILOT_EXECUTION_HORIZON:
+    if chunk.shape[0] < execution_horizon:
         raise ValueError(
             f"policy predicted {chunk.shape[0]} actions, but the evaluator "
-            f"needs {PILOT_EXECUTION_HORIZON} to execute"
+            f"needs {execution_horizon} to execute"
         )
-    return chunk[:PILOT_EXECUTION_HORIZON][0]
+    return chunk[:execution_horizon]
 
 
 def _request(sock, payload):
@@ -114,9 +124,17 @@ def main():
     parser.add_argument("--stats", required=True)
     parser.add_argument("--result", required=True)
     parser.add_argument("--max-control-steps", type=int, default=56)
+    parser.add_argument(
+        "--execution-horizon",
+        type=int,
+        default=PILOT_EXECUTION_HORIZON,
+        help="K: actions committed from each predicted chunk before requesting another one",
+    )
     parser.add_argument("--settle-steps", type=int, default=10)
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
+    if args.execution_horizon < 1:
+        raise ValueError("--execution-horizon must be >= 1")
 
     # LIBERO init-state files contain NumPy objects and need the trusted legacy
     # torch.load mode under PyTorch 2.6+.
@@ -162,6 +180,7 @@ def main():
     control_steps = 0
     final_server_stats = None
     async_step_trace = []
+    policy_calls = 0
 
     with socket.create_connection((args.host, args.port), timeout=300) as sock:
         sock.settimeout(300)
@@ -169,10 +188,10 @@ def main():
         for _ in range(args.settle_steps):
             obs, _, done, _ = env.step([0.0] * 6 + [-1.0])
 
-        for control_step in range(args.max_control_steps):
+        while control_steps < args.max_control_steps:
+            control_step = control_steps
             image = np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
             wrist = np.ascontiguousarray(obs["robot0_eye_in_hand_image"][::-1, ::-1])
-            frames.append(image)
             started = time.perf_counter()
             response = _request(
                 sock,
@@ -184,46 +203,60 @@ def main():
                 },
             )
             step_latencies.append(time.perf_counter() - started)
+            policy_calls += 1
             final_server_stats = response.get("async_stats")
-            if final_server_stats is not None:
-                async_step_trace.append(
-                    {
-                        "control_step": final_server_stats.get(
-                            "last_control_step", control_step
-                        ),
-                        "environment_control_step": control_step,
-                        "cached_vlm_step": final_server_stats.get("latest_vlm_step"),
-                        "vlm_age_steps": final_server_stats.get("vlm_age_steps"),
-                        "semantic_state_age_steps": final_server_stats.get("vlm_age_steps"),
-                        "action_control_step": final_server_stats.get("last_control_step"),
-                        "action_control_timestamp": final_server_stats.get(
-                            "last_control_timestamp"
-                        ),
-                        "condition_compute_seconds": final_server_stats.get(
-                            "last_condition_compute_seconds"
-                        ),
-                        "action_compute_seconds": final_server_stats.get(
-                            "last_action_compute_seconds"
-                        ),
-                        "policy_compute_seconds": final_server_stats.get(
-                            "last_policy_compute_seconds"
-                        ),
-                        "vlm_submitted": final_server_stats.get("vlm_submitted"),
-                        "vlm_completed": final_server_stats.get("vlm_completed"),
-                        "queued_refreshes": final_server_stats.get("queued_refreshes"),
-                        "latest_vlm_activation_event": final_server_stats.get(
-                            "latest_vlm_activation_event"
-                        ),
-                        "latest_vlm_refresh_event": (
-                            (final_server_stats.get("vlm_refresh_events") or [None])[-1]
-                        ),
-                        "policy_roundtrip_seconds": step_latencies[-1],
-                    }
-                )
-            action_norm = _select_executed_action(response["normalized_actions"])
-            action = _unnormalize_action(action_norm, action_stats)
-            obs, _, done, _ = env.step(action.tolist())
-            control_steps += 1
+            action_chunk = _select_executed_actions(
+                response["normalized_actions"], args.execution_horizon
+            )
+            for chunk_offset, action_norm in enumerate(action_chunk):
+                if control_steps >= args.max_control_steps:
+                    break
+                frames.append(np.ascontiguousarray(obs["agentview_image"][::-1, ::-1]))
+                action = _unnormalize_action(action_norm, action_stats)
+                obs, _, done, _ = env.step(action.tolist())
+                if final_server_stats is not None:
+                    vlm_age = final_server_stats.get("vlm_age_steps")
+                    if vlm_age is not None:
+                        vlm_age = int(vlm_age) + chunk_offset
+                    async_step_trace.append(
+                        {
+                            "control_step": control_steps,
+                            "environment_control_step": control_steps,
+                            "policy_call_control_step": control_step,
+                            "execution_chunk_offset": chunk_offset,
+                            "cached_vlm_step": final_server_stats.get("latest_vlm_step"),
+                            "vlm_age_steps": vlm_age,
+                            "semantic_state_age_steps": vlm_age,
+                            "action_control_step": control_step,
+                            "action_control_timestamp": final_server_stats.get(
+                                "last_control_timestamp"
+                            ),
+                            "condition_compute_seconds": final_server_stats.get(
+                                "last_condition_compute_seconds"
+                            ),
+                            "action_compute_seconds": final_server_stats.get(
+                                "last_action_compute_seconds"
+                            ),
+                            "policy_compute_seconds": final_server_stats.get(
+                                "last_policy_compute_seconds"
+                            ),
+                            "vlm_submitted": final_server_stats.get("vlm_submitted"),
+                            "vlm_completed": final_server_stats.get("vlm_completed"),
+                            "queued_refreshes": final_server_stats.get("queued_refreshes"),
+                            "latest_vlm_activation_event": final_server_stats.get(
+                                "latest_vlm_activation_event"
+                            ),
+                            "latest_vlm_refresh_event": (
+                                (final_server_stats.get("vlm_refresh_events") or [None])[-1]
+                            ),
+                            "policy_roundtrip_seconds": (
+                                step_latencies[-1] if chunk_offset == 0 else None
+                            ),
+                        }
+                    )
+                control_steps += 1
+                if done:
+                    break
             if done:
                 break
 
@@ -237,8 +270,12 @@ def main():
         "success": bool(done),
         "control_steps": control_steps,
         "max_control_steps": args.max_control_steps,
-        "execution_horizon": PILOT_EXECUTION_HORIZON,
-        "execution_policy": "apply the first predicted action, then request a new chunk next control step",
+        "execution_horizon": args.execution_horizon,
+        "policy_calls": policy_calls,
+        "execution_policy": (
+            f"apply up to the first {args.execution_horizon} predicted actions, "
+            "then request a new chunk"
+        ),
         "async_step_trace": async_step_trace,
         "activation_events": (
             final_server_stats.get("vlm_activation_events", [])

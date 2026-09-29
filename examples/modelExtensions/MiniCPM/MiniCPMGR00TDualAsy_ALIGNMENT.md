@@ -105,8 +105,11 @@ trace analysis.
   live in the small LIBERO pilot.
 - The recorded rollout is one task and one seed, did not succeed, and does not
   establish an asynchronous policy improvement.
-- The pilot currently fixes K at one. Making K configurable in the evaluator
-  is separate from the alignment work and must not change H or M implicitly.
+- The LIBERO evaluator accepts `--execution-horizon K` independently of H, M,
+  and L. Policy calls occur at the next action-chunk boundary, so a completed
+  VLM refresh can only become action-visible at the next such call. Training
+  samples for an execution policy should represent actual policy-call frames
+  when checking exact temporal alignment.
 
 ## Same-trajectory 16-update comparison (2026-09-29)
 
@@ -159,3 +162,37 @@ result here is the checked H/K/M/L separation and the longer async source trace.
 
 Raw metrics, per-step trace, provenance, checkpoints, and videos are under
 `playground/Checkpoints/libero_minicpm_pilot/stage2_triplet_16updates_full56_seed1234/`.
+
+## Execution-horizon pilot (2026-09-29)
+
+To verify that predicted chunk length and committed action count are distinct,
+the LIBERO evaluator now accepts `--execution-horizon K` in `[1, H]`. The model
+still predicts `H=8` actions per policy call; the evaluator commits the first K
+actions, then requests a new chunk. `M=8` and the controlled worker delay
+`L=4` stayed unchanged. Each K run used the same seed, four optimizer updates
+on frames `[8, 9, 16, 17]`, held-out frame 23, and a 24-control-step rollout.
+Only GPU 0 was visible to the experiment process.
+
+| K | Policy calls / 24 control steps | Source 8 first used at | Source 16 first used at | Rollout |
+|---:|---:|---:|---:|---|
+| 1 | 24 | 12 | 20 | False |
+| 4 | 6 | 12 | 20 | False |
+| 8 | 3 | 16 | Not used by step 24 | False |
+
+For `K=8`, the fixed schedule targets source-8 activation at step 12, but the
+controller has no policy call there because it is executing the chunk requested
+at step 8. The refresh had completed by the next call, so the new semantic
+state was first consumed at step 16. Likewise, the step-16 refresh had no later
+action call inside this rollout.
+This is why H and K cannot be treated as the same parameter: H controls the
+predicted chunk size, while K controls how often the controller can replan and
+consume refreshed VLM state. Larger K reduces policy calls but can increase
+the effective age of semantic context at the next action decision.
+
+The optimizer losses were identical across the three runs because seed, model,
+and training samples were held fixed: action loss `1.5730 → 1.3946`, held-out
+loss `1.6273`. These short rollouts all failed the task and do not compare
+policy quality. The controlled schedule also waits at eligible policy-call
+boundaries; it is not a live wall-clock latency benchmark. Full traces,
+provenance, trainable checkpoints, and videos are under
+`playground/Checkpoints/libero_minicpm_pilot/stage2_k_sweep_20260929/`.

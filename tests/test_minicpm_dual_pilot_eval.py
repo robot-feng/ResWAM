@@ -3,7 +3,7 @@ import pytest
 
 from examples.modelExtensions.MiniCPM.libero_dual_pilot_eval import (
     PILOT_EXECUTION_HORIZON,
-    _select_executed_action,
+    _select_executed_actions,
     _unnormalize_action,
 )
 
@@ -11,17 +11,26 @@ from examples.modelExtensions.MiniCPM.libero_dual_pilot_eval import (
 def test_pilot_executes_one_action_from_predicted_action_chunk():
     predicted_chunk = np.arange(8 * 7, dtype=np.float32).reshape(8, 7)
 
-    selected = _select_executed_action(predicted_chunk)
+    selected = _select_executed_actions(predicted_chunk)
 
     assert PILOT_EXECUTION_HORIZON == 1
-    np.testing.assert_array_equal(selected, predicted_chunk[0])
+    np.testing.assert_array_equal(selected, predicted_chunk[:1])
+
+
+def test_execution_horizon_selects_first_k_actions_independently_of_prediction_horizon():
+    predicted_chunk = np.arange(8 * 7, dtype=np.float32).reshape(8, 7)
+    np.testing.assert_array_equal(_select_executed_actions(predicted_chunk, 4), predicted_chunk[:4])
+    with pytest.raises(ValueError, match="needs 9 to execute"):
+        _select_executed_actions(predicted_chunk, 9)
 
 
 def test_pilot_accepts_single_action_and_rejects_empty_chunk():
     single_action = np.arange(7, dtype=np.float32)
-    np.testing.assert_array_equal(_select_executed_action(single_action), single_action)
+    np.testing.assert_array_equal(_select_executed_actions(single_action), single_action[None, :])
     with pytest.raises(ValueError, match="predicted 0 actions"):
-        _select_executed_action(np.empty((0, 7), dtype=np.float32))
+        _select_executed_actions(np.empty((0, 7), dtype=np.float32))
+    with pytest.raises(ValueError, match="execution_horizon=2"):
+        _select_executed_actions(single_action, 2)
 
 
 def test_unnormalization_maps_eef_extremes_and_gripper_convention():

@@ -495,7 +495,9 @@ def _run_training(model, framework_name, examples, heldout, learning_rate):
     }
 
 
-def _serve_and_simulate(model, framework_name, output_dir, instruction, max_steps, seed):
+def _serve_and_simulate(
+    model, framework_name, output_dir, instruction, max_steps, seed, execution_horizon
+):
     if hasattr(model, "reset_async_cache"):
         model.reset_async_cache()
     server = _ThreadedTCPServer(("127.0.0.1", 0), model)
@@ -532,6 +534,8 @@ def _serve_and_simulate(model, framework_name, output_dir, instruction, max_step
         str(result_path),
         "--max-control-steps",
         str(max_steps),
+        "--execution-horizon",
+        str(execution_horizon),
         "--seed",
         str(seed),
     ]
@@ -579,6 +583,12 @@ def main():
         help="explicit episode-0 frame IDs used in update order (defaults to the pilot window)",
     )
     parser.add_argument("--max-control-steps", type=int, default=56)
+    parser.add_argument(
+        "--execution-horizon",
+        type=int,
+        default=1,
+        help="K: number of predicted actions committed before requesting another chunk",
+    )
     parser.add_argument(
         "--models",
         nargs="+",
@@ -639,6 +649,11 @@ def main():
     )
     if action_chunk_length < 1:
         raise ValueError("framework.action_model.action_horizon must be >= 1")
+    if args.execution_horizon < 1 or args.execution_horizon > action_chunk_length:
+        raise ValueError(
+            "--execution-horizon K must be between 1 and action_model.action_horizon "
+            f"H={action_chunk_length}; got K={args.execution_horizon}"
+        )
 
     from starVLA.dataloader.lerobot_datasets import make_LeRobotSingleDataset
 
@@ -792,7 +807,7 @@ def main():
         },
         "horizons": {
             "action_prediction_H": action_chunk_length,
-            "execution_K": 1,
+            "execution_K": args.execution_horizon,
             "vlm_refresh_M": vlm_refresh_interval,
             "alignment_mode_runtime": alignment["runtime_mode"] if alignment else None,
             "alignment_mode_training": alignment["training_mode"] if alignment else None,
@@ -827,7 +842,7 @@ def main():
         "training_frames": selected,
         "heldout_frame": heldout_frame,
         "action_horizon": action_chunk_length,
-        "execution_horizon": 1,
+        "execution_horizon": args.execution_horizon,
         "vlm_refresh_interval": vlm_refresh_interval,
         "vlm_update_interval": vlm_refresh_interval,
         "runtime_alignment_mode": alignment["runtime_mode"] if alignment else None,
@@ -901,6 +916,7 @@ def main():
                 "put the bowl on the plate",
                 args.max_control_steps,
                 args.seed,
+                args.execution_horizon,
             )
             record["simulation"] = simulation
             print(

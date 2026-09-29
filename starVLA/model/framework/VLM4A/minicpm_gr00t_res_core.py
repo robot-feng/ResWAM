@@ -299,7 +299,10 @@ class MiniCPMGR00TResCore(baseframework):
         history, instruction, episode_id = self._history_from_example(example)
         current_image = example.get("current_image", history[-1].image)
         terminal_image = example.get("terminal_image", example.get("goal_image"))
-        if example.get("goal_target_valid", True) is not True:
+        # Residual supervision is only valid when the dataset carries an
+        # explicit success-terminal annotation. Do not silently treat a
+        # missing validity field as a trustworthy goal label.
+        if example.get("goal_target_valid") is not True:
             raise ValueError("goal_target_valid must be true for residual supervision")
         if terminal_image is None:
             raise ValueError("residual supervision requires an explicit successful terminal_image")

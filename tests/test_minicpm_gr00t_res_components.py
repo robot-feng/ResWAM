@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+from omegaconf import OmegaConf
 from PIL import Image
 
 import starVLA.dataloader.minicpm_res_lerobot as residual_data
@@ -71,16 +72,19 @@ def test_multistep_mean_baseline_requires_samples_at_every_selected_position():
 
 def test_residual_target_alignment_zero_case_and_future_target_isolation():
     captured = {}
+    observed_vlm_inputs = []
 
     class _HistoryAdapter:
         def tokenize_history_query(self, instruction, episode_id, history, history_mode, device):
             captured["history"] = list(history)
             captured["instruction"] = instruction
             captured["episode_id"] = episode_id
-            return {
+            inputs = {
                 "input_ids": torch.full((1, 256), 77, dtype=torch.long, device=device),
                 "attention_mask": torch.ones((1, 256), dtype=torch.long, device=device),
             }
+            observed_vlm_inputs.append({key: value.clone() for key, value in inputs.items()})
+            return inputs
 
     class _ConstantResidualHead(torch.nn.Module):
         def forward(self, query_hidden_states):
@@ -116,9 +120,11 @@ def test_residual_target_alignment_zero_case_and_future_target_isolation():
     )
     current = Image.new("RGB", (8, 8), color=(1, 2, 3))
     future = Image.new("RGB", (8, 8), color=(4, 5, 6))
+    alternate_future = Image.new("RGB", (8, 8), color=(7, 8, 9))
     feature_by_image_id = {
         id(current): torch.ones((1, 256, 384)),
         id(future): torch.full((1, 256, 384), 3.0),
+        id(alternate_future): torch.full((1, 256, 384), 4.0),
     }
     model.encode_dino = types.MethodType(
         lambda self, image: feature_by_image_id[id(image)], model
@@ -142,11 +148,123 @@ def test_residual_target_alignment_zero_case_and_future_target_isolation():
     assert torch.all(outputs["predicted_goal_features"] == 1.25)
     assert loss.item() == pytest.approx((2.0 - 0.25) ** 2)
 
+    # Changing only the future target changes supervision, never the VLM
+    # history/query or prediction. This catches accidental target-image leakage.
+    alternate_loss, alternate_outputs = model._forward_residual(
+        {**example, "terminal_image": alternate_future}
+    )
+    assert torch.equal(observed_vlm_inputs[0]["input_ids"], observed_vlm_inputs[1]["input_ids"])
+    assert torch.equal(
+        observed_vlm_inputs[0]["attention_mask"], observed_vlm_inputs[1]["attention_mask"]
+    )
+    assert torch.equal(outputs["predicted_residual"], alternate_outputs["predicted_residual"])
+    assert torch.all(alternate_outputs["target_residual"] == 3.0)
+    assert alternate_loss.item() == pytest.approx((3.0 - 0.25) ** 2)
+
     # At the annotated terminal step current and goal features are identical,
     # so the target residual must be exactly zero.
     zero_example = {**example, "terminal_image": current}
     _, zero_outputs = model._forward_residual(zero_example)
     assert torch.count_nonzero(zero_outputs["target_residual"]) == 0
+
+
+@pytest.mark.parametrize("validity", ["missing", None, False, "true"])
+def test_residual_supervision_requires_an_explicit_true_success_label(validity):
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    frame = HistoryFrame(Image.new("RGB", (2, 2)), "episode-a", 0, 0.0, "primary", 0)
+    model._history_from_example = types.MethodType(
+        lambda self, example: ([frame], "task", "episode-a"), model
+    )
+    model._device = types.MethodType(lambda self: torch.device("cpu"), model)
+    model.history_adapter = types.SimpleNamespace(
+        tokenize_history_query=lambda *args, **kwargs: pytest.fail(
+            "unverified terminal labels must be rejected before VLM encoding"
+        )
+    )
+    model.config = types.SimpleNamespace(
+        framework=types.SimpleNamespace(
+            residual_model=types.SimpleNamespace(history_mode="full")
+        )
+    )
+
+    example = {
+        "history": [frame],
+        "current_image": frame.image,
+        "terminal_image": Image.new("RGB", (2, 2)),
+    }
+    if validity != "missing":
+        example["goal_target_valid"] = validity
+
+    with pytest.raises(ValueError, match="goal_target_valid must be true"):
+        model._forward_residual(example)
+
+
+def test_frozen_dino_teacher_stays_frozen_and_in_eval_mode_during_training():
+    class _VisionLanguageModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.vision_tower = torch.nn.Linear(3, 3)
+            self.lm_head = torch.nn.Linear(3, 3)
+
+    class _VLMInterface(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.model = _VisionLanguageModel()
+
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    model.dino_encoder = torch.nn.Linear(3, 3)
+    model.qwen_vl_interface = _VLMInterface()
+    for parameter in model.dino_encoder.parameters():
+        parameter.requires_grad_(False)
+
+    model.train()
+
+    assert model.training is True
+    assert model.dino_encoder.training is False
+    assert all(not parameter.requires_grad for parameter in model.dino_encoder.parameters())
+    assert model.qwen_vl_interface.model.vision_tower.training is False
+    assert all(
+        not parameter.requires_grad
+        for parameter in model.qwen_vl_interface.model.vision_tower.parameters()
+    )
+    assert model.qwen_vl_interface.model.lm_head.training is True
+
+
+def test_context_budget_overflow_fails_without_silent_frame_truncation():
+    model = object.__new__(MiniCPMGR00TResCore)
+    torch.nn.Module.__init__(model)
+    model.max_context_tokens = 3
+    inputs = {
+        "input_ids": torch.arange(5).reshape(1, 5),
+        "attention_mask": torch.ones((1, 5), dtype=torch.long),
+    }
+    with pytest.raises(ValueError, match="No frames were silently truncated"):
+        model._check_context_budget(inputs)
+
+
+def test_absolute_and_residual_targets_have_identical_head_capacity():
+    residual_cfg = _as_config(
+        {"framework": {"residual_model": {"prediction_target": "residual"}}}
+    )
+    absolute_cfg = _as_config(
+        {"framework": {"residual_model": {"prediction_target": "absolute_goal"}}}
+    )
+    residual_values = OmegaConf.to_container(residual_cfg, resolve=True)
+    absolute_values = OmegaConf.to_container(absolute_cfg, resolve=True)
+    residual_values["framework"]["residual_model"].pop("prediction_target")
+    absolute_values["framework"]["residual_model"].pop("prediction_target")
+    assert residual_values == absolute_values
+
+    residual_head = DINOResidualHead()
+    absolute_head = DINOResidualHead()
+    residual_shapes = {name: tuple(value.shape) for name, value in residual_head.state_dict().items()}
+    absolute_shapes = {name: tuple(value.shape) for name, value in absolute_head.state_dict().items()}
+    assert residual_shapes == absolute_shapes
+    assert sum(parameter.numel() for parameter in residual_head.parameters()) == sum(
+        parameter.numel() for parameter in absolute_head.parameters()
+    )
 
 
 def test_gather_query_tokens_with_left_padding():

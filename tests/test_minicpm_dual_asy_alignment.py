@@ -4,7 +4,9 @@ import threading
 
 import pytest
 import torch
+from PIL import Image
 
+from starVLA.dataloader.minicpm_asy_temporal_sampler import MiniCPMAsyncTemporalSampler
 from starVLA.model.framework.VLM4A.MiniCPMGR00TDualAsy import MiniCPMGR00TDualAsy
 from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
     fixed_activation_steps,
@@ -152,6 +154,57 @@ def test_trace_replay_extracts_first_use_of_each_source():
         {"control_step": 12, "cached_vlm_step": 8},
     ]
     assert observed_activation_steps(trace) == {0: 0, 8: 11}
+
+
+def test_observed_irregular_runtime_trace_replays_identically_in_training_and_policy():
+    # This is a per-control-step trace emitted by the evaluator. Source 8 takes
+    # four steps, source 16 completes immediately, and source 24 takes four.
+    runtime_rows = [
+        {"control_step": step, "cached_vlm_step": source}
+        for step, source in [
+            (0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0),
+            (8, 0), (9, 0), (10, 0), (11, 0), (12, 8), (13, 8), (14, 8),
+            (15, 8), (16, 16), (17, 16), (18, 16), (19, 16), (20, 16),
+            (21, 16), (22, 16), (23, 16), (24, 16), (25, 16), (26, 16),
+            (27, 16), (28, 24),
+        ]
+    ]
+    activation_steps = observed_activation_steps(runtime_rows)
+    assert activation_steps == {0: 0, 8: 12, 16: 16, 24: 28}
+
+    policy = _stub_async_policy("trace_replay")
+    policy.vlm_refresh_interval = 8
+    policy.execution_horizon = 4
+    policy.trace_activation_steps = activation_steps
+
+    sampler = MiniCPMAsyncTemporalSampler(
+        {
+            "mode": "trace_replay",
+            "refresh_interval": 8,
+            "execution_horizon": 4,
+            "trace_activation_steps": activation_steps,
+            "trace_max_control_step": 28,
+        }
+    )
+    expected_sources = [0, 0, 0, 8, 16, 16, 16, 24]
+    for step, expected_source in zip(range(0, 29, 4), expected_sources):
+        current_image = [Image.new("RGB", (2, 2), color=(step, 0, 0))]
+        action = torch.full((4, 7), float(step))
+        aligned = sampler.align_sample(
+            {"image": current_image, "action": action, "lang": "task"},
+            control_step=step,
+            load_anchor_images=lambda source: [
+                Image.new("RGB", (2, 2), color=(source, 0, 0))
+            ],
+            cache_key=("episode-a", step),
+        )
+
+        assert policy._scheduled_source_step(step) == expected_source
+        assert aligned["vlm_source_step"] == expected_source
+        assert aligned["vlm_activation_step"] <= step
+        assert aligned["image"] is current_image
+        assert aligned["action"] is action
+        assert aligned["vlm_image"][0].getpixel((0, 0))[0] == expected_source
 
 
 def test_trace_replay_requires_step_zero_bootstrap():
@@ -369,6 +422,30 @@ def test_controlled_runtime_publishes_only_at_scheduled_activation_step():
     assert policy._activation_events[0]["ready_step"] == 11
     assert policy._activation_events[0]["request_timestamp"] == 10.0
     assert policy._activation_events[0]["ready_timestamp"] == 10.25
+
+
+def test_failed_refresh_does_not_replace_the_last_complete_active_snapshot():
+    policy = _stub_async_policy("wall_clock")
+    previous_hidden = torch.full((1, 2, 3), 7.0)
+    policy._cached_vlm_hidden = previous_hidden
+    policy._cached_vlm_step = 0
+    failed = {
+        "generation": 1,
+        "source_step": 8,
+        "instructions": ("task",),
+        "hidden": None,
+        "compute_seconds": 0.1,
+        "request_timestamp": 10.0,
+        "ready_timestamp": 10.1,
+        "error": ValueError("synthetic VLM failure"),
+    }
+
+    with pytest.raises(RuntimeError, match="refresh failed at control step 8"):
+        policy._accept_vlm_result(failed, ready_control_step=8)
+
+    assert policy._cached_vlm_hidden is previous_hidden
+    assert policy._cached_vlm_step == 0
+    assert 8 not in policy._completed_snapshots
 
 
 def test_synchronous_refresh_is_ready_and_active_on_its_request_step():

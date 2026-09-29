@@ -12,11 +12,20 @@ import starVLA.dataloader as dataloader_module
 import starVLA.dataloader.lerobot_datasets as lerobot_datasets_module
 
 
-def _sampler(mode="fixed_step_delay", latency=4, trace=None, trace_max=None, cache_size=0):
+def _sampler(
+    mode="fixed_step_delay",
+    latency=4,
+    trace=None,
+    trace_max=None,
+    cache_size=0,
+    execution_horizon=1,
+    refresh_interval=8,
+):
     return MiniCPMAsyncTemporalSampler(
         {
             "mode": mode,
-            "refresh_interval": 8,
+            "refresh_interval": refresh_interval,
+            "execution_horizon": execution_horizon,
             "fixed_latency_steps": latency if mode == "fixed_step_delay" else None,
             "trace_activation_steps": trace,
             "trace_max_control_step": trace_max,
@@ -168,7 +177,7 @@ def test_trace_replay_training_and_runtime_must_share_the_same_trace(tmp_path):
         resolve_async_training_alignment(cfg)
 
 
-def test_general_sampler_rejects_nonunit_execution_horizon_until_boundary_sampling_exists():
+def test_general_sampler_resolves_nonunit_execution_horizon_for_boundary_sampling():
     cfg = OmegaConf.create(
         {
             "name": "MiniCPMGR00TDualAsy",
@@ -180,8 +189,73 @@ def test_general_sampler_rejects_nonunit_execution_horizon_until_boundary_sampli
             },
         }
     )
-    with pytest.raises(ValueError, match="currently aligns K=1"):
-        resolve_async_training_alignment(cfg)
+    assert resolve_async_training_alignment(cfg)["execution_horizon"] == 4
+
+
+def test_sampler_requires_policy_call_boundary_and_rounds_activation_to_that_boundary():
+    sampler = _sampler(latency=1, execution_horizon=4, refresh_interval=2)
+    aligned = sampler.align_sample(
+        {"image": [_frame(4)], "action": "a"},
+        control_step=4,
+        load_anchor_images=lambda step: [_frame(step)],
+        cache_key=("episode", 1),
+    )
+    assert aligned["vlm_source_step"] == 2
+    assert aligned["vlm_activation_step"] == 4
+
+    between_calls = _sampler(latency=1, execution_horizon=4)
+    with pytest.raises(ValueError, match="policy-call boundaries"):
+        between_calls.align_sample(
+            {"image": [_frame(6)], "action": "a"},
+            control_step=6,
+            load_anchor_images=lambda step: [_frame(step)],
+            cache_key=("episode", 1),
+        )
+
+
+def test_trace_ready_between_policy_calls_becomes_active_at_the_next_k_boundary():
+    sampler = _sampler(
+        mode="trace_replay",
+        trace={0: 0, 8: 11},
+        trace_max=15,
+        execution_horizon=4,
+    )
+    aligned = sampler.align_sample(
+        {"image": [_frame(12)], "action": "a"},
+        control_step=12,
+        load_anchor_images=lambda step: [_frame(step)],
+        cache_key=("episode", 1),
+    )
+    assert aligned["vlm_source_step"] == 8
+    assert aligned["vlm_activation_step"] == 12
+
+
+def test_le_robot_mixture_sampler_emits_only_execution_boundaries():
+    sampler = _sampler(execution_horizon=4)
+
+    class FakeSingleDataset:
+        dataset_name = "fake-libero"
+        trajectory_ids = np.asarray([3, 7])
+        trajectory_lengths = np.asarray([13, 10])
+
+        def __init__(self):
+            self._async_temporal_sampler = sampler
+
+    mixture = object.__new__(LeRobotMixtureDataset)
+    mixture.mode = "train"
+    mixture.seed = 42
+    mixture.epoch = 0
+    mixture.datasets = [FakeSingleDataset()]
+    mixture._dataset_sampling_weights = np.asarray([1.0])
+    mixture._trajectory_sampling_weights = [np.asarray([4 / 7, 3 / 7])]
+    mixture._effective_trajectory_lengths = [np.asarray([4, 3])]
+    mixture._sampling_start_steps = [np.asarray([0, 0])]
+    mixture._sampling_step_strides = [4]
+
+    samples = [mixture.sample_step(index)[2] for index in range(128)]
+
+    assert all(step % 4 == 0 for step in samples)
+    assert set(samples).issubset({0, 4, 8, 12})
 
 
 def test_lerobot_mixture_returns_anchor_metadata_without_changing_current_action():

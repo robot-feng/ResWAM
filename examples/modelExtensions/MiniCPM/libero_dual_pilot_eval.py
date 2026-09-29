@@ -181,10 +181,12 @@ def main():
     final_server_stats = None
     async_step_trace = []
     policy_calls = 0
+    observation_update_latencies = []
 
     with socket.create_connection((args.host, args.port), timeout=300) as sock:
         sock.settimeout(300)
-        _request(sock, {"type": "reset", "instruction": args.task})
+        reset_response = _request(sock, {"type": "reset", "instruction": args.task})
+        supports_observe = bool(reset_response.get("supports_observe", False))
         for _ in range(args.settle_steps):
             obs, _, done, _ = env.step([0.0] * 6 + [-1.0])
 
@@ -257,6 +259,31 @@ def main():
                 control_steps += 1
                 if done:
                     break
+                if (
+                    supports_observe
+                    and chunk_offset + 1 < len(action_chunk)
+                    and control_steps < args.max_control_steps
+                ):
+                    observe_image = np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
+                    observe_wrist = np.ascontiguousarray(
+                        obs["robot0_eye_in_hand_image"][::-1, ::-1]
+                    )
+                    observe_started = time.perf_counter()
+                    _request(
+                        sock,
+                        {
+                            "type": "observe",
+                            "instruction": args.task,
+                            "control_step": control_steps,
+                            "images_jpeg": [
+                                _jpeg_b64(observe_image),
+                                _jpeg_b64(observe_wrist),
+                            ],
+                        },
+                    )
+                    observation_update_latencies.append(
+                        time.perf_counter() - observe_started
+                    )
             if done:
                 break
 
@@ -272,6 +299,17 @@ def main():
         "max_control_steps": args.max_control_steps,
         "execution_horizon": args.execution_horizon,
         "policy_calls": policy_calls,
+        "observation_update_calls": len(observation_update_latencies),
+        "mean_observation_update_seconds": (
+            float(np.mean(observation_update_latencies))
+            if observation_update_latencies
+            else 0.0
+        ),
+        "p95_observation_update_seconds": (
+            float(np.percentile(observation_update_latencies, 95))
+            if observation_update_latencies
+            else 0.0
+        ),
         "execution_policy": (
             f"apply up to the first {args.execution_horizon} predicted actions, "
             "then request a new chunk"

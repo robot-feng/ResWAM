@@ -47,11 +47,8 @@ def resolve_async_training_alignment(framework_cfg: Any) -> dict:
     if refresh_interval < 1:
         raise ValueError("framework.vlm_refresh_interval must be >= 1")
     execution_horizon = int(framework.get("execution_horizon", 1))
-    if execution_horizon != 1:
-        raise ValueError(
-            "the general LeRobot temporal sampler currently aligns K=1 policy "
-            "calls; K>1 requires policy-call-boundary sampling"
-        )
+    if execution_horizon < 1:
+        raise ValueError("framework.execution_horizon must be >= 1")
 
     fixed_latency_steps = alignment.get("fixed_latency_steps")
     if runtime_mode == "fixed_step_delay":
@@ -101,6 +98,7 @@ def resolve_async_training_alignment(framework_cfg: Any) -> dict:
         "mode": training_mode,
         "runtime_mode": runtime_mode,
         "refresh_interval": refresh_interval,
+        "execution_horizon": execution_horizon,
         "fixed_latency_steps": fixed_latency_steps,
         "trace_activation_steps": trace_activation_steps,
         "trace_max_control_step": trace_max_control_step,
@@ -114,6 +112,7 @@ class MiniCPMAsyncTemporalSampler:
     def __init__(self, alignment: dict, *, cache_size: int = 0):
         self.mode = str(alignment["mode"])
         self.refresh_interval = int(alignment["refresh_interval"])
+        self.execution_horizon = int(alignment.get("execution_horizon", 1))
         self.fixed_latency_steps = alignment.get("fixed_latency_steps")
         if self.fixed_latency_steps is not None:
             self.fixed_latency_steps = int(self.fixed_latency_steps)
@@ -136,6 +135,8 @@ class MiniCPMAsyncTemporalSampler:
             )
         if self.refresh_interval < 1:
             raise ValueError("refresh_interval must be >= 1")
+        if self.execution_horizon < 1:
+            raise ValueError("execution_horizon must be >= 1")
         if self.mode == "fixed_step_delay" and self.fixed_latency_steps is None:
             raise ValueError("fixed_step_delay requires fixed_latency_steps")
         if self.mode == "trace_replay" and not self.trace_activation_steps:
@@ -154,15 +155,7 @@ class MiniCPMAsyncTemporalSampler:
 
     def _source_and_activation(self, control_step: int) -> tuple[int, int]:
         control_step = int(control_step)
-        if (
-            self.mode == "trace_replay"
-            and self.trace_max_control_step is not None
-            and control_step > self.trace_max_control_step
-        ):
-            raise ValueError(
-                "sample control_step exceeds alignment trace coverage: "
-                f"{control_step} > {self.trace_max_control_step}"
-            )
+        self.validate_trace_coverage(control_step)
 
         source_step = source_step_at(
             control_step,
@@ -172,14 +165,33 @@ class MiniCPMAsyncTemporalSampler:
             trace_activation_steps=self.trace_activation_steps,
         )
         if self.mode == "trace_replay":
-            activation_step = self.trace_activation_steps[source_step]
+            ready_boundary = self.trace_activation_steps[source_step]
+            activation_step = (
+                (ready_boundary + self.execution_horizon - 1)
+                // self.execution_horizon
+            ) * self.execution_horizon
         else:
             latency = 0 if self.mode == "synchronous" else self.fixed_latency_steps
             events = fixed_activation_steps(
-                self.refresh_interval, int(latency), control_step
+                self.refresh_interval,
+                int(latency),
+                control_step,
+                self.execution_horizon,
             )
             activation_step = events[source_step]
         return source_step, activation_step
+
+    def validate_trace_coverage(self, control_step: int, *, context="sample") -> None:
+        control_step = int(control_step)
+        if (
+            self.mode == "trace_replay"
+            and self.trace_max_control_step is not None
+            and control_step > self.trace_max_control_step
+        ):
+            raise ValueError(
+                f"{context} control_step exceeds alignment trace coverage: "
+                f"{control_step} > {self.trace_max_control_step}"
+            )
 
     def align_sample(
         self,
@@ -191,6 +203,11 @@ class MiniCPMAsyncTemporalSampler:
     ) -> dict:
         """Preserve current observation/action; add the correct past VLM image."""
         current_step = int(control_step)
+        if current_step % self.execution_horizon != 0:
+            raise ValueError(
+                "DualAsy training samples must be policy-call boundaries: "
+                f"control_step={current_step}, K={self.execution_horizon}"
+            )
         source_step, activation_step = self._source_and_activation(current_step)
         key = (cache_key, source_step)
 

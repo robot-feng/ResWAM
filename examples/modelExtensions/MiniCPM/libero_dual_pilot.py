@@ -334,7 +334,13 @@ class _PolicyServer(socketserver.StreamRequestHandler):
                 if kind == "reset":
                     if hasattr(policy, "reset_async_cache"):
                         policy.reset_async_cache()
-                    _json_send(self, {"ok": True})
+                    _json_send(
+                        self,
+                        {
+                            "ok": True,
+                            "supports_observe": hasattr(policy, "observe_for_async_refresh"),
+                        },
+                    )
                     continue
                 if kind == "stats":
                     if hasattr(policy, "wait_for_async_refreshes"):
@@ -342,7 +348,7 @@ class _PolicyServer(socketserver.StreamRequestHandler):
                     stats = policy.async_stats() if hasattr(policy, "async_stats") else None
                     _json_send(self, {"ok": True, "async_stats": stats})
                     continue
-                if kind != "act":
+                if kind not in ("act", "observe"):
                     raise ValueError(f"unknown request type {kind!r}")
 
                 images = []
@@ -351,6 +357,13 @@ class _PolicyServer(socketserver.StreamRequestHandler):
                     images.append(image)
                 example = {"image": images, "lang": request["instruction"]}
                 step = int(request["control_step"])
+                if kind == "observe":
+                    if hasattr(policy, "observe_for_async_refresh"):
+                        output = policy.observe_for_async_refresh([example], control_step=step)
+                        _json_send(self, {"ok": True, **(output or {})})
+                    else:
+                        _json_send(self, {"ok": True, "ignored": True})
+                    continue
                 if hasattr(policy, "reset_async_cache"):
                     output = policy.predict_action([example], control_step=step)
                 else:
@@ -385,6 +398,7 @@ def _build_examples(
     fixed_latency_steps=None,
     trace_activation_steps=None,
     trace_max_control_step=None,
+    execution_horizon=1,
 ):
     examples = []
     sampler = None
@@ -395,6 +409,7 @@ def _build_examples(
             {
                 "mode": alignment_mode,
                 "refresh_interval": vlm_refresh_interval,
+                "execution_horizon": execution_horizon,
                 "fixed_latency_steps": fixed_latency_steps,
                 "trace_activation_steps": trace_activation_steps,
                 "trace_max_control_step": trace_max_control_step,
@@ -413,13 +428,16 @@ def _build_examples(
     return examples
 
 
-def _select_training_frames(frame_ids, train_steps, max_frame):
+def _select_training_frames(frame_ids, train_steps, max_frame, execution_horizon=1):
     """Validate and select a deterministic set of episode-local train frames."""
     train_steps = int(train_steps)
     max_frame = int(max_frame)
     frame_ids = tuple(int(frame_id) for frame_id in frame_ids)
     if train_steps < 1:
         raise ValueError("--train-steps must be >= 1")
+    execution_horizon = int(execution_horizon)
+    if execution_horizon < 1:
+        raise ValueError("execution_horizon must be >= 1")
     if len(set(frame_ids)) != len(frame_ids):
         raise ValueError("training frame IDs must be unique")
     invalid = [frame_id for frame_id in frame_ids if frame_id < 0 or frame_id >= max_frame]
@@ -431,7 +449,29 @@ def _select_training_frames(frame_ids, train_steps, max_frame):
         raise ValueError(
             f"received {len(frame_ids)} training frame IDs for {train_steps} updates"
         )
-    return list(frame_ids[:train_steps])
+    selected = [frame for frame in frame_ids if frame % execution_horizon == 0]
+    for frame in range(0, max_frame, execution_horizon):
+        if len(selected) >= train_steps:
+            break
+        if frame not in selected:
+            selected.append(frame)
+    if len(selected) < train_steps:
+        raise ValueError(
+            f"only {len(selected)} policy-call frames are available for K="
+            f"{execution_horizon}, but {train_steps} updates were requested"
+        )
+    return selected[:train_steps]
+
+
+def _select_heldout_frame(max_frame, train_frames, execution_horizon, preferred=23):
+    candidates = [
+        step
+        for step in range(0, int(max_frame), int(execution_horizon))
+        if step not in set(train_frames)
+    ]
+    if not candidates:
+        raise ValueError("no held-out policy-call frame remains after training split")
+    return min(candidates, key=lambda step: (abs(step - int(preferred)), step))
 
 
 def _freeze_backbones(model, include_dino):
@@ -687,16 +727,37 @@ def main():
         raise RuntimeError(f"could not identify the expected episode 0 window: {episode0_steps[:10]}")
     frame_count = len(episode0_steps)
     max_frame = min(frame_count - action_chunk_length, 47)
+    training_trace_max = (
+        alignment["training_trace_max_control_step"]
+        if run_async and alignment["training_mode"] == "trace_replay"
+        else None
+    )
+    if training_trace_max is not None:
+        max_frame = min(max_frame, int(training_trace_max) + 1)
+    if max_frame < 1:
+        raise ValueError("the selected training alignment has no covered episode samples")
     requested_train_frames = (
         args.train_frame_ids if args.train_frame_ids is not None else TRAIN_FRAME_IDS
     )
     selected = _select_training_frames(
-        requested_train_frames, args.train_steps, max_frame
+        requested_train_frames,
+        args.train_steps,
+        max_frame,
+        execution_horizon=(args.execution_horizon if run_async else 1),
     )
 
     # Materialize only the selected single-trajectory samples. No mixture
     # sampling or other episode is used in this pilot.
-    heldout_frame = min(23, max_frame - 1)
+    heldout_frame = (
+        _select_heldout_frame(
+            max_frame,
+            selected,
+            args.execution_horizon,
+            preferred=23,
+        )
+        if run_async
+        else min(23, max_frame - 1)
+    )
     raw_examples = {frame: dataset[frame] for frame in set(selected + [heldout_frame])}
     heldout = copy.deepcopy(raw_examples[heldout_frame])
     asy_examples = []
@@ -712,6 +773,7 @@ def main():
             fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
             trace_max_control_step=alignment["training_trace_max_control_step"],
+            execution_horizon=args.execution_horizon,
         )
         heldout = _build_examples(
             dataset,
@@ -722,6 +784,7 @@ def main():
             fixed_latency_steps=training_latency,
             trace_activation_steps=alignment["trace_activation_steps"],
             trace_max_control_step=alignment["training_trace_max_control_step"],
+            execution_horizon=args.execution_horizon,
         )[0]
 
     base_cfg.framework.qwenvl.base_vlm = "/data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6"
@@ -731,6 +794,7 @@ def main():
     # receives no refresh-cadence config and remains a synchronous baseline.
     if run_async:
         base_cfg.framework.vlm_refresh_interval = vlm_refresh_interval
+        base_cfg.framework.execution_horizon = args.execution_horizon
         base_cfg.framework.async_alignment = {
             "mode": alignment["runtime_mode"],
             "fixed_latency_steps": alignment["fixed_latency_steps"],

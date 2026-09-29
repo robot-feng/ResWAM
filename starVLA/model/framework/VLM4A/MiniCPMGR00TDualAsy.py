@@ -2,12 +2,13 @@
 # Licensed under the MIT License.
 """MiniCPM-V + DINO dual-frequency policy.
 
-The VLM consumes a low-rate observation stream while DINO and the action head
-consume the current observation on every control step. At inference, VLM refresh
-jobs run on a dedicated worker and publish complete hidden-state snapshots;
-actions keep using the newest completed snapshot while a refresh is in flight.
-Training accepts ``vlm_image`` on each example to align its VLM condition with
-the low-rate anchor frame for that control step.
+The action path consumes the current observation at each policy call, while an
+independent observer API supplies every environment frame to the low-rate VLM
+refresh scheduler. At inference, VLM refresh jobs run on a dedicated worker and
+publish complete hidden-state snapshots; actions keep using the newest completed
+snapshot while a refresh is in flight. Training accepts ``vlm_image`` on each
+example to align its VLM condition with the low-rate anchor frame for that
+control step.
 """
 
 from __future__ import annotations
@@ -64,6 +65,8 @@ def _asy_config(config):
     cfg.framework.async_alignment.setdefault("trace_max_control_step", None)
     if cfg.framework.get("vlm_refresh_interval") is None:
         cfg.framework.vlm_refresh_interval = 8
+    if cfg.framework.get("execution_horizon") is None:
+        cfg.framework.execution_horizon = 1
     action_defaults = {
         "action_model_type": "DiT-B",
         "action_hidden_dim": 1024,
@@ -94,7 +97,7 @@ def _asy_config(config):
 
 @FRAMEWORK_REGISTRY.register("MiniCPMGR00TDualAsy")
 class MiniCPMGR00TDualAsy(Qwen_Dual):
-    """Low-rate MiniCPM-V refresh with per-step DINO and action inference."""
+    """Low-rate MiniCPM-V refresh with K-boundary action inference."""
 
     def __init__(self, config: Optional[dict] = None, **kwargs) -> None:
         cfg = _asy_config(config)
@@ -102,8 +105,16 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         # Keep VLM refresh cadence separate from action chunk/execution lengths.
         self.vlm_refresh_interval = int(self.config.framework.vlm_refresh_interval)
         self.vlm_update_interval = self.vlm_refresh_interval
+        self.execution_horizon = int(self.config.framework.execution_horizon)
         if self.vlm_update_interval < 1:
             raise ValueError("framework.vlm_refresh_interval must be >= 1")
+        if self.execution_horizon < 1:
+            raise ValueError("framework.execution_horizon must be >= 1")
+        if self.execution_horizon > self.action_horizon:
+            raise ValueError(
+                "framework.execution_horizon must not exceed "
+                f"action_model.action_horizon ({self.action_horizon})"
+            )
 
         alignment_cfg = self.config.framework.async_alignment
         self.async_alignment_mode = str(alignment_cfg.mode)
@@ -156,8 +167,12 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         self._runtime_lock = threading.RLock()
         self._cached_vlm_hidden = None
         self._cached_instruction = None
+        self._observed_instruction_key = None
         self._cached_vlm_step = None
         self._cached_ready_timestamp = None
+        self._last_refresh_source_step = None
+        self._last_observed_step = None
+        self._last_policy_call_step = None
         self._completed_snapshots = {}
         self._refresh_events = []
         self._refresh_events_by_key = {}
@@ -340,7 +355,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             if completed_step <= int(source_step):
                 del self._completed_snapshots[completed_step]
 
-    def _poll_vlm_results(self, control_step=None):
+    def _poll_vlm_results(self, control_step=None, *, activate_wall_clock=True):
         while True:
             try:
                 item = self._result_queue.get_nowait()
@@ -348,7 +363,8 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 break
             self._accept_vlm_result(item, ready_control_step=control_step)
         if (
-            self.async_alignment_mode == "wall_clock"
+            self.async_alignment_mode in ("wall_clock", "synchronous")
+            and activate_wall_clock
             and control_step is not None
             and self._completed_snapshots
         ):
@@ -408,8 +424,43 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         )
         self._stats["vlm_submitted"] += 1
 
+    def _maybe_schedule_vlm_refresh(
+        self,
+        images,
+        instructions,
+        control_step,
+        source_timestamp=None,
+        *,
+        defer_activation=False,
+    ):
+        step = int(control_step)
+        previous_source = self._last_refresh_source_step
+        refresh_due = previous_source is None or step - previous_source >= self.vlm_update_interval
+        if not refresh_due:
+            return False
+        if self.async_alignment_mode == "synchronous":
+            self._run_synchronous_refresh(
+                images,
+                instructions,
+                step,
+                source_timestamp=source_timestamp,
+                activate=not defer_activation,
+            )
+        else:
+            self._submit_vlm_refresh(
+                images, instructions, step, source_timestamp=source_timestamp
+            )
+        self._last_refresh_source_step = step
+        return True
+
     def _run_synchronous_refresh(
-        self, images, instructions, control_step, source_timestamp=None
+        self,
+        images,
+        instructions,
+        control_step,
+        source_timestamp=None,
+        *,
+        activate=True,
     ):
         source_timestamp = (
             time.perf_counter() if source_timestamp is None else float(source_timestamp)
@@ -423,21 +474,29 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         self._stats["vlm_completed"] += 1
         elapsed = ready_timestamp - request_timestamp
         self._stats["vlm_seconds"].append(elapsed)
-        self._record_activation(
-            {
-                "source_step": int(control_step),
-                "source_timestamp": source_timestamp,
-                "instructions": tuple(instructions),
-                "hidden": hidden,
-                "request_timestamp": request_timestamp,
-                "ready_timestamp": ready_timestamp,
-                "compute_seconds": elapsed,
-                "ready_step": int(control_step),
-            },
-            ready_timestamp,
-            activation_step=control_step,
-            ready_step=control_step,
-        )
+        item = {
+            "source_step": int(control_step),
+            "source_timestamp": source_timestamp,
+            "instructions": tuple(instructions),
+            "hidden": hidden,
+            "request_timestamp": request_timestamp,
+            "ready_timestamp": ready_timestamp,
+            "compute_seconds": elapsed,
+            "ready_step": int(control_step),
+        }
+        if activate:
+            self._record_activation(
+                item,
+                ready_timestamp,
+                activation_step=control_step,
+                ready_step=control_step,
+            )
+            self._discard_completed_snapshots_through(control_step)
+        else:
+            event["ready_step"] = int(control_step)
+            event["ready_timestamp"] = float(ready_timestamp)
+            event["compute_seconds"] = float(elapsed)
+            self._completed_snapshots[int(control_step)] = item
 
     def _scheduled_source_step(self, control_step):
         if self.async_alignment_mode == "fixed_step_delay":
@@ -446,6 +505,7 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 mode=self.async_alignment_mode,
                 refresh_interval=self.vlm_refresh_interval,
                 fixed_latency_steps=self.fixed_latency_steps,
+                execution_horizon=self.execution_horizon,
             )
         if self.async_alignment_mode == "trace_replay":
             return source_step_at(
@@ -491,8 +551,12 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             self._control_step_origin = None
             self._cached_vlm_hidden = None
             self._cached_instruction = None
+            self._observed_instruction_key = None
             self._cached_vlm_step = None
             self._cached_ready_timestamp = None
+            self._last_refresh_source_step = None
+            self._last_observed_step = None
+            self._last_policy_call_step = None
             self._completed_snapshots.clear()
             self._refresh_events.clear()
             self._refresh_events_by_key.clear()
@@ -591,6 +655,70 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         )
         return last_hidden, state
 
+    @torch.inference_mode()
+    def observe_for_async_refresh(self, examples=None, control_step: Optional[int] = None):
+        """Feed every environment observation to the low-rate refresh scheduler.
+
+        The action head is not run here. Call this at non-policy-call control
+        steps so M remains a control-step cadence even when K > 1.
+        """
+        with self._runtime_lock:
+            if examples is None:
+                raise ValueError("observe_for_async_refresh requires examples")
+            if not isinstance(examples, list):
+                examples = [examples]
+            if len(examples) != 1:
+                raise ValueError("Stateful DualAsy observation currently requires batch size 1")
+
+            source_timestamp = time.perf_counter()
+            batch_images, _, instructions, _ = self.align_model_input(examples)
+            instruction_key = tuple(instructions)
+            known_instruction_key = (
+                self._observed_instruction_key
+                if self._observed_instruction_key is not None
+                else self._cached_instruction
+            )
+            if (
+                known_instruction_key is not None
+                and known_instruction_key != instruction_key
+            ):
+                self.reset_async_cache()
+            self._observed_instruction_key = instruction_key
+
+            step = self._resolve_control_step(control_step)
+            if (
+                self.execution_horizon > 1
+                and self._last_observed_step is not None
+                and step != self._last_observed_step + 1
+            ):
+                raise ValueError(
+                    "K>1 requires observe_for_async_refresh() at every intervening "
+                    f"control step; last={self._last_observed_step}, received={step}"
+                )
+            if (
+                self.async_alignment_mode == "trace_replay"
+                and self.trace_max_control_step is not None
+                and step > self.trace_max_control_step
+            ):
+                raise ValueError(
+                    f"trace_replay ends at control step {self.trace_max_control_step}, "
+                    f"received step {step}"
+                )
+            self._control_step = max(self._control_step, step + 1)
+            self._maybe_schedule_vlm_refresh(
+                batch_images,
+                instructions,
+                step,
+                source_timestamp=source_timestamp,
+                defer_activation=True,
+            )
+            self._poll_vlm_results(
+                control_step=step,
+                activate_wall_clock=False,
+            )
+            self._last_observed_step = step
+            return {"observed_control_step": step}
+
     def forward(self, examples=None, **kwargs):
         """Train from the current DINO image and an explicitly aligned VLM frame.
 
@@ -640,8 +768,17 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
         source_timestamp = time.perf_counter()
         batch_images, wrist_views, instructions, state = self.align_model_input(examples)
         instruction_key = tuple(instructions)
-        if self._cached_instruction is not None and self._cached_instruction != instruction_key:
+        known_instruction_key = (
+            self._observed_instruction_key
+            if self._observed_instruction_key is not None
+            else self._cached_instruction
+        )
+        if (
+            known_instruction_key is not None
+            and known_instruction_key != instruction_key
+        ):
             self.reset_async_cache()
+        self._observed_instruction_key = instruction_key
 
         step = self._resolve_control_step(control_step)
         if (
@@ -653,17 +790,35 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
                 f"trace_replay ends at control step {self.trace_max_control_step}, "
                 f"received step {step}"
             )
+        if step % self.execution_horizon != 0:
+            raise ValueError(
+                "predict_action must run at policy-call boundaries: "
+                f"control_step={step}, K={self.execution_horizon}"
+            )
+        if (
+            self.execution_horizon > 1
+            and self._last_policy_call_step is not None
+            and step != self._last_policy_call_step + self.execution_horizon
+        ):
+            raise ValueError(
+                "predict_action must follow execution_horizon policy intervals: "
+                f"previous={self._last_policy_call_step}, current={step}, "
+                f"K={self.execution_horizon}"
+            )
+        if (
+            self.execution_horizon > 1
+            and self._last_policy_call_step is not None
+            and self._last_observed_step != step - 1
+        ):
+            raise ValueError(
+                "K>1 requires every intervening control observation before the "
+                f"next action call; last_observed={self._last_observed_step}, "
+                f"next_policy_step={step}"
+            )
         self._control_step = max(self._control_step, step + 1)
-        refresh_due = self._cached_vlm_hidden is None or step % self.vlm_update_interval == 0
-        if refresh_due:
-            if self.async_alignment_mode == "synchronous":
-                self._run_synchronous_refresh(
-                    batch_images, instructions, step, source_timestamp=source_timestamp
-                )
-            else:
-                self._submit_vlm_refresh(
-                    batch_images, instructions, step, source_timestamp=source_timestamp
-                )
+        self._maybe_schedule_vlm_refresh(
+            batch_images, instructions, step, source_timestamp=source_timestamp
+        )
 
         self._poll_vlm_results(control_step=step)
         if self.async_alignment_mode in ("fixed_step_delay", "trace_replay"):
@@ -727,6 +882,11 @@ class MiniCPMGR00TDualAsy(Qwen_Dual):
             action_seconds = time.perf_counter() - action_started
         self._stats["action_calls"] += 1
         self._stats["last_control_step"] = step
+        self._last_policy_call_step = step
+        self._last_observed_step = max(
+            step,
+            step if self._last_observed_step is None else self._last_observed_step,
+        )
         self._stats["last_control_timestamp"] = source_timestamp
         self._stats["last_condition_compute_seconds"] = condition_seconds
         self._stats["last_action_compute_seconds"] = action_seconds

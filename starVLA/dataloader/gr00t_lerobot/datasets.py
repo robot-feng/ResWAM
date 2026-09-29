@@ -2258,9 +2258,11 @@ class LeRobotMixtureDataset(Dataset):
 
         self._valid_step_bounds: list[tuple[int, int]] = []
         self._effective_trajectory_lengths: list[np.ndarray] = []
-        if self.drop_incomplete_action_chunks:
-            # Sample only base frames whose action offsets stay in the episode.
-            for dataset in self.datasets:
+        self._sampling_start_steps: list[np.ndarray] = []
+        self._sampling_step_strides: list[int] = []
+        for dataset in self.datasets:
+            if self.drop_incomplete_action_chunks:
+                # Sample only base frames whose action offsets stay in the episode.
                 offsets = [
                     np.asarray(dataset.delta_indices[key], dtype=np.int64)
                     for key in dataset.modality_keys.get("action", [])
@@ -2270,28 +2272,60 @@ class LeRobotMixtureDataset(Dataset):
                 max_offset = int(offsets.max()) if offsets.size else 0
                 valid_start = max(0, -min_offset)
                 end_trim = max(0, max_offset)
-                effective_lengths = np.maximum(
-                    np.asarray(dataset.trajectory_lengths, dtype=np.int64)
-                    - valid_start
-                    - end_trim,
-                    0,
+            else:
+                valid_start, end_trim = 0, 0
+
+            sampler = getattr(dataset, "_async_temporal_sampler", None)
+            stride = int(sampler.execution_horizon) if sampler is not None else 1
+            if stride < 1:
+                raise ValueError("execution_horizon must be >= 1")
+            starts = []
+            effective_lengths = []
+            for trajectory_length in np.asarray(dataset.trajectory_lengths, dtype=np.int64):
+                first = ((valid_start + stride - 1) // stride) * stride
+                end_exclusive = int(trajectory_length) - end_trim
+                count = (
+                    max(0, (end_exclusive - 1 - first) // stride + 1)
+                    if first < end_exclusive
+                    else 0
                 )
-                if not np.any(effective_lengths > 0):
-                    raise ValueError(
-                        f"Dataset {dataset.dataset_name!r} has no complete action chunks "
-                        f"for action offset range [{min_offset}, {max_offset}]"
+                if sampler is not None and count > 0:
+                    sampler.validate_trace_coverage(
+                        first + (count - 1) * stride,
+                        context=(
+                            f"dataset {dataset.dataset_name!r} trajectory "
+                            f"{int(dataset.trajectory_ids[len(starts)])}"
+                        ),
                     )
-                self._valid_step_bounds.append((valid_start, end_trim))
-                self._effective_trajectory_lengths.append(effective_lengths)
+                starts.append(first)
+                effective_lengths.append(count)
+            effective_lengths = np.asarray(effective_lengths, dtype=np.int64)
+            if not np.any(effective_lengths > 0):
+                raise ValueError(
+                    f"Dataset {dataset.dataset_name!r} has no valid policy-call samples "
+                    f"for K={stride} and action offset range "
+                    f"[{valid_start}, -{end_trim}]"
+                )
+            self._valid_step_bounds.append((valid_start, end_trim))
+            self._effective_trajectory_lengths.append(effective_lengths)
+            self._sampling_start_steps.append(np.asarray(starts, dtype=np.int64))
+            self._sampling_step_strides.append(stride)
 
         # Set properties for sampling
 
         # 1. Dataset lengths
-        if self.drop_incomplete_action_chunks:
+        if any(
+            self.drop_incomplete_action_chunks
+            or getattr(dataset, "_async_temporal_sampler", None) is not None
+            for dataset in self.datasets
+        ):
             self._dataset_lengths = np.array(
                 [lengths.sum() for lengths in self._effective_trajectory_lengths]
             )
-            print(f"Dropped incomplete action chunks; effective dataset lengths: {self._dataset_lengths}")
+            print(
+                "Effective dataset lengths after sample constraints: "
+                f"{self._dataset_lengths}"
+            )
         else:
             self._dataset_lengths = np.array([len(dataset) for dataset in self.datasets])
         print(f"Dataset lengths: {self._dataset_lengths}")
@@ -2322,16 +2356,20 @@ class LeRobotMixtureDataset(Dataset):
         self._trajectory_sampling_weights: list[np.ndarray] = []
         for i, dataset in enumerate(self.datasets):
             trajectory_sampling_weights = np.ones(len(dataset.trajectory_lengths))
-            if self.drop_incomplete_action_chunks:
-                trajectory_sampling_weights[self._effective_trajectory_lengths[i] == 0] = 0
+            effective_lengths = self._effective_trajectory_lengths[i]
+            trajectory_sampling_weights[effective_lengths == 0] = 0
             if self.balance_trajectory_weights:
+                constrained = self.drop_incomplete_action_chunks or getattr(
+                    dataset, "_async_temporal_sampler", None
+                ) is not None
                 trajectory_sampling_weights *= (
-                    self._effective_trajectory_lengths[i]
-                    if self.drop_incomplete_action_chunks
-                    else dataset.trajectory_lengths
+                    effective_lengths if constrained else dataset.trajectory_lengths
                 )
             
-            if self.drop_incomplete_action_chunks:
+            constrained = self.drop_incomplete_action_chunks or getattr(
+                dataset, "_async_temporal_sampler", None
+            ) is not None
+            if constrained:
                 if np.any(trajectory_sampling_weights < 0):
                     raise ValueError(f"Dataset {i} has negative trajectory sampling weights")
             elif np.any(trajectory_sampling_weights <= 0):
@@ -2427,12 +2465,15 @@ class LeRobotMixtureDataset(Dataset):
         trajectory_id = dataset.trajectory_ids[trajectory_index]
 
         # Sample step
-        if self.drop_incomplete_action_chunks:
-            valid_start, end_trim = self._valid_step_bounds[dataset_index]
-            valid_end_exclusive = int(dataset.trajectory_lengths[trajectory_index]) - end_trim
-            base_index = int(rng.integers(valid_start, valid_end_exclusive))
-        else:
-            base_index = rng.choice(dataset.trajectory_lengths[trajectory_index])
+        count = int(self._effective_trajectory_lengths[dataset_index][trajectory_index])
+        if count < 1:
+            raise RuntimeError(
+                f"selected trajectory {trajectory_id} has no valid call boundary "
+                f"for execution horizon K={self._sampling_step_strides[dataset_index]}"
+            )
+        first = int(self._sampling_start_steps[dataset_index][trajectory_index])
+        stride = int(self._sampling_step_strides[dataset_index])
+        base_index = first + int(rng.integers(count)) * stride
         return dataset, trajectory_id, base_index
 
     

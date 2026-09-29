@@ -61,6 +61,7 @@ def build_dataloader(cfg, dataset_py="lerobot_datasets_oxe"): # TODO now here on
                 "Using MiniCPM DualAsy LeRobot temporal alignment: "
                 f"mode={async_alignment['mode']} "
                 f"M={async_alignment['refresh_interval']} "
+                f"K={async_alignment['execution_horizon']} "
                 f"trace={async_alignment['trace_path']}"
             )
 

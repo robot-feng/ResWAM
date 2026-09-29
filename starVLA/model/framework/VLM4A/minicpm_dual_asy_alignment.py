@@ -38,32 +38,41 @@ def fixed_activation_steps(
     refresh_interval: int,
     latency_steps: int,
     max_control_step: int,
+    execution_horizon: int = 1,
 ) -> dict[int, int]:
     """Return ``source_step -> activation_step`` for a serialized worker.
 
     The first refresh at step zero is an awaited bootstrap. Subsequent jobs are
-    requested every ``refresh_interval`` steps and require ``latency_steps``
-    control steps of worker service. If service takes longer than the interval,
-    requests queue behind the prior job.
+    requested every ``refresh_interval`` control steps and require
+    ``latency_steps`` control steps of worker service. If service takes longer
+    than the interval, requests queue behind the prior job. A completed result
+    becomes action-visible at the next policy-call boundary, determined by
+    ``execution_horizon``.
     """
     refresh_interval = int(refresh_interval)
     latency_steps = int(latency_steps)
     max_control_step = int(max_control_step)
+    execution_horizon = int(execution_horizon)
     if refresh_interval < 1:
         raise ValueError("refresh_interval must be >= 1")
     if latency_steps < 0:
         raise ValueError("latency_steps must be >= 0")
     if max_control_step < 0:
         raise ValueError("max_control_step must be >= 0")
+    if execution_horizon < 1:
+        raise ValueError("execution_horizon must be >= 1")
 
     events = {0: 0}
     previous_completion = 0
     source_step = refresh_interval
     while source_step <= max_control_step:
         start_step = max(source_step, previous_completion)
-        activation_step = start_step + latency_steps
+        ready_step = start_step + latency_steps
+        activation_step = (
+            (ready_step + execution_horizon - 1) // execution_horizon
+        ) * execution_horizon
         events[source_step] = activation_step
-        previous_completion = activation_step
+        previous_completion = ready_step
         source_step += refresh_interval
     return events
 
@@ -75,6 +84,7 @@ def source_step_at(
     refresh_interval: int,
     fixed_latency_steps: int | None = None,
     trace_activation_steps: dict[int, int] | None = None,
+    execution_horizon: int = 1,
 ) -> int:
     """Return the newest VLM source step available to an action at ``t``.
 
@@ -104,7 +114,12 @@ def source_step_at(
         latency = 0 if mode == "synchronous" else fixed_latency_steps
         if latency is None:
             raise ValueError("fixed_step_delay requires fixed_latency_steps")
-        events = fixed_activation_steps(refresh_interval, int(latency), control_step)
+        events = fixed_activation_steps(
+            refresh_interval,
+            int(latency),
+            control_step,
+            execution_horizon,
+        )
 
     eligible = [source for source, activation in events.items() if activation <= control_step]
     if not eligible:

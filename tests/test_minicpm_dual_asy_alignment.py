@@ -32,6 +32,47 @@ def test_fixed_schedule_models_worker_queue_when_latency_exceeds_refresh_interva
     assert fixed_activation_steps(4, 6, 12) == {0: 0, 4: 10, 8: 16, 12: 22}
 
 
+def test_fixed_schedule_activates_only_at_action_call_boundaries():
+    events = fixed_activation_steps(2, 1, 12, execution_horizon=4)
+    assert events == {0: 0, 2: 4, 4: 8, 6: 8, 8: 12, 10: 12, 12: 16}
+    assert source_step_at(
+        4,
+        mode="fixed_step_delay",
+        refresh_interval=2,
+        fixed_latency_steps=1,
+        execution_horizon=4,
+    ) == 2
+    assert source_step_at(
+        8,
+        mode="fixed_step_delay",
+        refresh_interval=2,
+        fixed_latency_steps=1,
+        execution_horizon=4,
+    ) == 6
+
+
+@pytest.mark.parametrize(
+    ("latency", "expected_call_sources"),
+    [
+        (0, [0, 4, 8, 12]),
+        (1, [0, 2, 6, 10]),
+        (2, [0, 2, 6, 10]),
+        (4, [0, 0, 2, 4]),
+    ],
+)
+def test_k4_m2_controlled_latency_grid(latency, expected_call_sources):
+    assert [
+        source_step_at(
+            step,
+            mode="fixed_step_delay",
+            refresh_interval=2,
+            fixed_latency_steps=latency,
+            execution_horizon=4,
+        )
+        for step in (0, 4, 8, 12)
+    ] == expected_call_sources
+
+
 @pytest.mark.parametrize(
     ("latency", "checks"),
     [
@@ -55,6 +96,7 @@ def test_training_anchor_uses_latest_source_available_at_control_step(latency, c
 def test_fixed_runtime_source_matches_training_source_schedule(latency):
     policy = _stub_async_policy("fixed_step_delay")
     policy.vlm_refresh_interval = 8
+    policy.execution_horizon = 1
     policy.fixed_latency_steps = latency
     for step in range(40):
         assert policy._scheduled_source_step(step) == source_step_at(
@@ -166,8 +208,13 @@ def _stub_async_policy(mode):
     policy._runtime_lock = threading.RLock()
     policy._cached_vlm_hidden = None
     policy._cached_instruction = None
+    policy._observed_instruction_key = None
     policy._cached_vlm_step = None
     policy._cached_ready_timestamp = None
+    policy._last_refresh_source_step = None
+    policy._last_observed_step = None
+    policy._last_policy_call_step = None
+    policy.execution_horizon = 1
     policy._completed_snapshots = {}
     policy._refresh_events = []
     policy._refresh_events_by_key = {}
@@ -183,6 +230,120 @@ def _stub_async_policy(mode):
         "vlm_seconds": [],
     }
     return policy
+
+
+def test_observe_path_submits_vlm_on_control_steps_between_action_calls():
+    policy = _stub_async_policy("wall_clock")
+    policy.vlm_refresh_interval = 2
+    policy.vlm_update_interval = 2
+    policy.execution_horizon = 4
+    policy._control_step_origin = 0
+    policy._control_step = 2
+    policy._last_refresh_source_step = 0
+    policy.align_model_input = lambda examples: (["front"], None, ["task"], None)
+    submitted = []
+    policy._submit_vlm_refresh = lambda images, instructions, step, source_timestamp=None: submitted.append(step)
+
+    result = policy.observe_for_async_refresh(
+        {"image": ["frame-2"], "lang": "task"}, control_step=2
+    )
+
+    assert submitted == [2]
+    assert result["observed_control_step"] == 2
+    assert policy._last_observed_step == 2
+
+
+def test_wall_clock_observation_is_not_action_active_until_next_policy_call():
+    policy = _stub_async_policy("wall_clock")
+    policy.vlm_refresh_interval = 2
+    policy.vlm_update_interval = 2
+    policy.execution_horizon = 4
+    policy._control_step_origin = 0
+    policy._control_step = 2
+    policy._last_refresh_source_step = 0
+    policy._cached_vlm_hidden = torch.zeros((1, 2, 3))
+    policy._cached_vlm_step = 0
+    policy._cached_instruction = ("task",)
+    policy._observed_instruction_key = ("task",)
+    policy.align_model_input = lambda examples: (["front"], None, ["task"], None)
+
+    def complete_refresh(images, instructions, step, source_timestamp=None):
+        timestamp = 10.0 if source_timestamp is None else source_timestamp
+        policy._new_refresh_event(step, timestamp, timestamp)
+        policy._stats["vlm_submitted"] += 1
+        policy._result_queue.put(
+            {
+                "generation": policy._async_generation,
+                "source_step": step,
+                "source_timestamp": timestamp,
+                "instructions": tuple(instructions),
+                "hidden": torch.ones((1, 2, 3)),
+                "compute_seconds": 0.1,
+                "request_timestamp": timestamp,
+                "ready_timestamp": timestamp + 0.1,
+                "error": None,
+            }
+        )
+
+    policy._submit_vlm_refresh = complete_refresh
+
+    policy.observe_for_async_refresh(
+        {"image": ["frame-2"], "lang": "task"}, control_step=2
+    )
+
+    assert policy._cached_vlm_step == 0
+    assert 2 in policy._completed_snapshots
+    assert policy._refresh_events_by_key[(1, 2)]["ready_step"] == 2
+
+    policy._poll_vlm_results(control_step=4)
+
+    assert policy._cached_vlm_step == 2
+    assert policy._activation_events[-1]["activation_step"] == 4
+
+
+def test_policy_inference_rejects_non_call_boundary_for_configured_k():
+    policy = _stub_async_policy("wall_clock")
+    policy.execution_horizon = 4
+    policy.vlm_refresh_interval = 8
+    policy.vlm_update_interval = 8
+    policy._control_step_origin = 0
+    policy.align_model_input = lambda examples: (["front"], ["wrist"], ["task"], None)
+
+    with pytest.raises(ValueError, match="policy-call boundaries"):
+        policy._predict_action_impl([{"image": ["frame"], "lang": "task"}], control_step=2)
+
+
+def test_k_greater_than_one_requires_all_intermediate_observations():
+    policy = _stub_async_policy("wall_clock")
+    policy.execution_horizon = 4
+    policy.vlm_refresh_interval = 8
+    policy.vlm_update_interval = 8
+    policy._control_step_origin = 0
+    policy._last_policy_call_step = 0
+    policy._last_observed_step = 2
+    policy.align_model_input = lambda examples: (["front"], ["wrist"], ["task"], None)
+
+    with pytest.raises(ValueError, match="every intervening control observation"):
+        policy._predict_action_impl([{"image": ["frame"], "lang": "task"}], control_step=4)
+
+
+def test_instruction_change_invalidates_pending_semantic_generation():
+    policy = _stub_async_policy("wall_clock")
+    policy.vlm_refresh_interval = 8
+    policy.vlm_update_interval = 8
+    policy._control_step_origin = 0
+    policy._control_step = 4
+    policy._observed_instruction_key = ("old task",)
+    policy.align_model_input = lambda examples: (["front"], None, ["new task"], None)
+    policy._submit_vlm_refresh = lambda *args, **kwargs: None
+
+    policy.observe_for_async_refresh(
+        {"image": ["frame-4"], "lang": "new task"}, control_step=4
+    )
+
+    assert policy._async_generation == 2
+    assert policy._observed_instruction_key == ("new task",)
+    assert policy._last_refresh_source_step == 0
 
 
 def test_controlled_runtime_publishes_only_at_scheduled_activation_step():

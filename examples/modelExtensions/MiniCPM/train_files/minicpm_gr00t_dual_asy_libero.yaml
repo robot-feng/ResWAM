@@ -1,7 +1,8 @@
 # action_horizon: number of actions predicted by the action head per call.
 # execution_horizon: number of predicted actions committed per call (when supported).
 # vlm_refresh_interval: control steps between upper VLM refreshes.
-# These are distinct; the pilot applies one action per control step and refreshes MiniCPM every 8 steps.
+# These are distinct; MiniCPM sees each environment frame for refresh scheduling,
+# while action inference follows execution_horizon policy-call boundaries.
 run_id: minicpm_gr00t_dual_asy_libero
 run_root_dir: playground/Checkpoints
 seed: 42
@@ -44,6 +45,7 @@ framework:
       output_dim: 1024
       positional_embeddings: null
   vlm_refresh_interval: 8
+  execution_horizon: 1
   # Runtime wall-clock delay is measured; no universal fixed L is assumed.
   # Offline wall-clock training needs a prior trace via --training-alignment-trace.
   async_alignment:

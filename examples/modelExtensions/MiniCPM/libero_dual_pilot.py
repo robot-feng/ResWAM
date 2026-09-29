@@ -548,7 +548,17 @@ def _run_training(model, framework_name, examples, heldout, learning_rate):
 
 
 def _serve_and_simulate(
-    model, framework_name, output_dir, instruction, max_steps, seed, execution_horizon
+    model,
+    framework_name,
+    output_dir,
+    instruction,
+    max_steps,
+    seed,
+    execution_horizon,
+    init_state_index=0,
+    settle_steps=10,
+    result_filename=None,
+    close_async_worker=True,
 ):
     if hasattr(model, "reset_async_cache"):
         model.reset_async_cache()
@@ -557,7 +567,7 @@ def _serve_and_simulate(
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
-    result_path = output_dir / f"{framework_name}_eval.json"
+    result_path = output_dir / (result_filename or f"{framework_name}_eval.json")
     env = os.environ.copy()
     env.update(
         {
@@ -586,10 +596,14 @@ def _serve_and_simulate(
         str(result_path),
         "--max-control-steps",
         str(max_steps),
+        "--init-state-index",
+        str(init_state_index),
         "--execution-horizon",
         str(execution_horizon),
         "--seed",
         str(seed),
+        "--settle-steps",
+        str(settle_steps),
     ]
     try:
         completed = subprocess.run(command, env=env, check=False, text=True, capture_output=True)
@@ -616,7 +630,7 @@ def _serve_and_simulate(
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=5)
-        if hasattr(model, "close_async_worker"):
+        if close_async_worker and hasattr(model, "close_async_worker"):
             model.close_async_worker()
 
 

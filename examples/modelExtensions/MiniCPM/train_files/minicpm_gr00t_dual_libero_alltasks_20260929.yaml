@@ -1,7 +1,7 @@
 # Stage 1: MiniCPM-V + DINOv2 dual-stream action policy.
 # Dataset fields follow the existing LIBERO LeRobot training setup; adjust the
 # local dataset root and data mix for this machine before training.
-run_id: minicpm_gr00t_dual_libero
+run_id: minicpm_dual_libero10_seed42_20260929_4gpu30k
 run_root_dir: playground/Checkpoints
 seed: 42
 wandb_entity: your_wandb_entity

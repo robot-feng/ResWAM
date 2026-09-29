@@ -4,6 +4,7 @@ import json
 import types
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from PIL import Image
@@ -21,6 +22,9 @@ from starVLA.model.framework.VLM4A.MiniCPMGR00TDualAsy import _asy_config
 from starVLA.model.framework.VLM4A.minicpm_video_history import HistoryFrame, gather_token_hidden_states
 from starVLA.model.framework.VLM4A.minicpm_res_metrics import goal_space_metrics
 from starVLA.model.modules.action_model.DINOResidualHead import DINOResidualHead
+from examples.modelExtensions.MiniCPM.eval_files.prepare_minicpm_residual_mean_baselines import (
+    _equal_weight_step_mean,
+)
 
 
 def test_residual_head_shapes_and_gradients():
@@ -46,6 +50,23 @@ def test_goal_space_metrics_score_absolute_and_residual_predictions_in_one_space
 
     zero = goal_space_metrics(torch.zeros_like(target_residual), target_residual, current)
     assert zero["goal_mse"] == pytest.approx(target_residual.square().mean().item())
+
+
+def test_multistep_mean_baseline_weights_control_steps_equally():
+    # Step 8 has two samples with mean 2; step 24 has one sample with mean 10.
+    # A pooled sample mean would be 4.67 and over-weight step 8; the intended
+    # position-balanced baseline is the mean of the two per-step means: 6.
+    actual = _equal_weight_step_mean(
+        {8: np.asarray([4.0]), 24: np.asarray([10.0])},
+        {8: 2, 24: 1},
+        [8, 24],
+    )
+    assert actual.tolist() == pytest.approx([6.0])
+
+
+def test_multistep_mean_baseline_requires_samples_at_every_selected_position():
+    with pytest.raises(ValueError, match="no residual samples"):
+        _equal_weight_step_mean({8: np.zeros(1)}, {8: 1}, [8, 24])
 
 
 def test_residual_target_alignment_zero_case_and_future_target_isolation():

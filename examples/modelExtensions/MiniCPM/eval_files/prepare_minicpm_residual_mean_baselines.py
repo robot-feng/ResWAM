@@ -10,6 +10,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Mapping
 
 import numpy as np
 import torch
@@ -27,6 +28,21 @@ ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CONFIG = ROOT / "examples/modelExtensions/MiniCPM/train_files/minicpm_gr00t_res_libero.yaml"
 DEFAULT_SPLIT = ROOT / "examples/modelExtensions/MiniCPM/annotations/libero_goal_residual_split_v1.json"
 DEFAULT_OUTPUT = ROOT / "playground/Checkpoints/minicpm_res_stage3_target_ablation/train_mean_residuals.npz"
+
+
+def _equal_weight_step_mean(
+    sums: Mapping[int, np.ndarray], counts: Mapping[int, int], steps: list[int]
+) -> np.ndarray:
+    """Average per-step means so long trajectories do not dominate the baseline."""
+    if not steps:
+        raise ValueError("at least one control step is required")
+    means = []
+    for step in steps:
+        count = int(counts.get(step, 0))
+        if count <= 0 or step not in sums:
+            raise ValueError(f"control step {step} has no residual samples")
+        means.append(sums[step] / count)
+    return np.stack(means, axis=0).mean(axis=0)
 
 
 def _load_cfg(path: Path):
@@ -65,9 +81,21 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--split-manifest", type=Path, default=DEFAULT_SPLIT)
     parser.add_argument("--split", choices=("train",), default="train")
-    parser.add_argument("--control-step", type=int, default=8)
+    step_group = parser.add_mutually_exclusive_group()
+    step_group.add_argument("--control-step", type=int, help="one control position (legacy form)")
+    step_group.add_argument(
+        "--control-steps",
+        help="comma-separated control positions; global/task means weight each position equally",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
+
+    if args.control_steps is not None:
+        control_steps = [int(item.strip()) for item in args.control_steps.split(",") if item.strip()]
+    else:
+        control_steps = [8 if args.control_step is None else int(args.control_step)]
+    if not control_steps or min(control_steps) < 0 or len(control_steps) != len(set(control_steps)):
+        raise ValueError("control steps must be unique nonnegative indices")
 
     if args.output.exists():
         raise FileExistsError(f"refusing to overwrite frozen baseline artifact: {args.output}")
@@ -91,7 +119,7 @@ def main() -> None:
         history_mode="current_only",
         sample_stride=int(cfg.framework.runtime.vlm_refresh_interval),
         episode_ids=split_info["episode_ids"],
-        control_steps=[args.control_step],
+        control_steps=control_steps,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dino = get_dino_model(str(cfg.framework.dino.dino_backbone)).to(device).eval()
@@ -99,10 +127,11 @@ def main() -> None:
         parameter.requires_grad_(False)
     teacher_sha256 = _module_sha256(dino)
 
-    global_sum = None
-    task_sums: dict[str, np.ndarray] = defaultdict(lambda: None)
-    task_counts: dict[str, int] = defaultdict(int)
-    episode_ids = []
+    global_sums: dict[int, np.ndarray] = {}
+    global_counts: dict[int, int] = defaultdict(int)
+    task_sums: dict[int, dict[str, np.ndarray]] = defaultdict(dict)
+    task_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    episode_ids: set[str] = set()
     entry_by_id = {str(row["episode_id"]): row for row in split_info["entries"]}
     for index in range(len(dataset)):
         sample = dataset[index]
@@ -122,28 +151,45 @@ def main() -> None:
         ):
             current, goal = (dino(tensor).float()[0].cpu().numpy() for tensor in tensors)
         residual = goal - current
-        if global_sum is None:
-            global_sum = np.zeros_like(residual, dtype=np.float64)
-        global_sum += residual
-        if task_sums[task] is None:
-            task_sums[task] = np.zeros_like(residual, dtype=np.float64)
-        task_sums[task] += residual
-        task_counts[task] += 1
-        episode_ids.append(episode_id)
+        step = int(sample["control_step"])
+        if step not in global_sums:
+            global_sums[step] = np.zeros_like(residual, dtype=np.float64)
+        global_sums[step] += residual
+        global_counts[step] += 1
+        if task not in task_sums[step]:
+            task_sums[step][task] = np.zeros_like(residual, dtype=np.float64)
+        task_sums[step][task] += residual
+        task_counts[step][task] += 1
+        episode_ids.add(episode_id)
 
-    if global_sum is None:
+    missing_steps = set(control_steps) - set(global_sums)
+    if missing_steps:
+        raise RuntimeError(f"no training samples for requested control steps {sorted(missing_steps)}")
+    if not global_sums:
         raise RuntimeError("train split produced no baseline feature samples")
-    task_names = sorted(task_sums)
+    ordered_steps = sorted(global_sums)
+    global_mean = _equal_weight_step_mean(global_sums, global_counts, ordered_steps)
+    task_names = sorted(set().union(*(task_sums[step] for step in ordered_steps)))
     arrays = {
-        "global_mean_residual": (global_sum / len(dataset)).astype(np.float32),
+        "global_mean_residual": global_mean.astype(np.float32),
     }
     task_keys = {}
+    task_counts_by_name = {task: 0 for task in task_names}
+    for step in ordered_steps:
+        for task, count in task_counts[step].items():
+            task_counts_by_name[task] += count
     for index, task in enumerate(task_names):
+        task_steps = [step for step in ordered_steps if task_counts[step].get(task, 0)]
+        task_mean = _equal_weight_step_mean(
+            {step: task_sums[step][task] for step in task_steps},
+            {step: task_counts[step][task] for step in task_steps},
+            task_steps,
+        )
         key = f"task_mean_residual_{index:02d}"
         task_keys[task] = key
-        arrays[key] = (task_sums[task] / task_counts[task]).astype(np.float32)
+        arrays[key] = task_mean.astype(np.float32)
     metadata = {
-        "schema_version": 1,
+        "schema_version": 2,
         "baseline_target": "z_terminal - z_current",
         "dataset_split": "train",
         "split_manifest_path": split_info["manifest_path"],
@@ -156,11 +202,20 @@ def main() -> None:
         "dino_teacher_sha256": teacher_sha256,
         "image_size": int(cfg.framework.dino.image_size),
         "precision": "BF16 autocast for DINO on CUDA; FP32 accumulation",
-        "control_step": args.control_step,
+        "control_step": ordered_steps[0] if len(ordered_steps) == 1 else None,
+        "control_steps": ordered_steps,
+        "control_step_aggregation": "equal_weight_over_per_step_means",
         "sample_stride": int(cfg.framework.runtime.vlm_refresh_interval),
         "sample_count": len(dataset),
+        "sample_counts_by_control_step": {
+            str(step): global_counts[step] for step in ordered_steps
+        },
+        "episode_count": len(episode_ids),
         "episode_ids": sorted(episode_ids, key=int),
-        "task_counts": dict(sorted(task_counts.items())),
+        "task_counts": dict(sorted(task_counts_by_name.items())),
+        "task_counts_by_control_step": {
+            str(step): dict(sorted(task_counts[step].items())) for step in ordered_steps
+        },
         "task_array_keys": task_keys,
         "git": _git_info(),
         "device": str(device),

@@ -66,12 +66,12 @@ datasets:
     image_size: 224
     obs_image_size: [224, 224]
     action_type: delta_ee # xyz + Euler-angle command deltas and gripper
-    per_device_batch_size: 1
+    per_device_batch_size: 16
     num_workers: 4
     video_backend: torchvision_av
 
 trainer:
-  max_train_steps: 100000
+  max_train_steps: 30000
   num_warmup_steps: 5000
   save_interval: 5000
   eval_interval: 1000000

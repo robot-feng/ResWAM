@@ -21,6 +21,8 @@ from starVLA.model.framework.VLM4A.minicpm_dual_asy_alignment import (
 
 
 def _to_plain_dict(value: Any) -> dict:
+    if hasattr(value, "unwrap"):
+        value = value.unwrap()
     if isinstance(value, DictConfig):
         value = OmegaConf.to_container(value, resolve=False)
     elif not isinstance(value, dict):

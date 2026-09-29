@@ -44,7 +44,14 @@ def _asy_config(config):
     elif isinstance(config, dict):
         raw = copy.deepcopy(config)
     else:
-        raw = OmegaConf.to_container(OmegaConf.create(config), resolve=False)
+        if hasattr(config, "unwrap"):
+            config = config.unwrap()
+        if isinstance(config, DictConfig):
+            raw = OmegaConf.to_container(config, resolve=False)
+        elif isinstance(config, dict):
+            raw = copy.deepcopy(config)
+        else:
+            raw = OmegaConf.to_container(OmegaConf.create(config), resolve=False)
 
     cfg = OmegaConf.create(raw or {})
     cfg.setdefault("framework", {})

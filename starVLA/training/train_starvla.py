@@ -32,7 +32,7 @@ except ImportError:
     pass
 
 import wandb
-from accelerate import Accelerator, DeepSpeedPlugin
+from accelerate import Accelerator, DeepSpeedPlugin, DistributedDataParallelKwargs
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from omegaconf import OmegaConf
@@ -48,7 +48,13 @@ from starVLA.training.trainer_utils.config_tracker import AccessTrackedConfig, w
 from starVLA.training.trainer_utils.trainer_tools import TrainerUtils, build_param_lr_groups, setup_optimizer_and_scheduler, normalize_dotlist_args
 
 deepspeed_plugin = None if os.environ.get("STARVLA_DISABLE_DEEPSPEED") == "1" else DeepSpeedPlugin()
-accelerator = Accelerator(deepspeed_plugin=deepspeed_plugin)
+ddp_kwargs = []
+if os.environ.get("STARVLA_DDP_FIND_UNUSED_PARAMETERS") == "1":
+    # Some action-head variants contain optional branches whose parameters do
+    # not contribute to the current action-loss path. Enable DDP's unused
+    # parameter discovery only for runs that explicitly request it.
+    ddp_kwargs.append(DistributedDataParallelKwargs(find_unused_parameters=True))
+accelerator = Accelerator(deepspeed_plugin=deepspeed_plugin, kwargs_handlers=ddp_kwargs or None)
 accelerator.print(accelerator.state)
 
 
@@ -158,6 +164,21 @@ class VLATrainer(TrainerUtils):
             else None
         )
         self.model = self.freeze_backbones(self.model, freeze_modules=freeze_modules)
+        # Frozen feature extractors should also stay in evaluation mode. A
+        # requires_grad=False flag prevents weight updates, but leaves dropout
+        # and stochastic-depth layers active if the parent model is in train
+        # mode; that would make frozen VLM/DINO features noisy across passes.
+        if isinstance(freeze_modules, str):
+            for module_path in (part.strip() for part in freeze_modules.split(",")):
+                if not module_path:
+                    continue
+                module = self.model
+                try:
+                    for attr in module_path.split("."):
+                        module = getattr(module, attr)
+                except AttributeError:
+                    continue
+                module.eval()
         self.print_trainable_parameters(self.model)
 
         self.model, self.optimizer, self.vla_train_dataloader = self.setup_distributed_training(
@@ -471,6 +492,12 @@ def main(cfg) -> None:
 
     cfg = wrap_config(cfg)
     logger.info("✅ Configuration wrapped for access tracking")
+
+    # Seed before model construction so paired framework runs with the same
+    # seed begin from the same randomly initialized action-head weights.
+    seed = int(cfg.get("seed", 42)) + int(accelerator.process_index)
+    set_seed(seed)
+    logger.info(f"Using initialization/training seed {seed}")
 
     output_dir = setup_directories(cfg=cfg)
     vla = build_framework(cfg)

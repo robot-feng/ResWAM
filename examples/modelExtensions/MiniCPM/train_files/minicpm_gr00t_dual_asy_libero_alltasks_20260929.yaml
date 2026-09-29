@@ -1,19 +1,20 @@
-# Stage 1: MiniCPM-V + DINOv2 dual-stream action policy.
-# Dataset fields follow the existing LIBERO LeRobot training setup; adjust the
-# local dataset root and data mix for this machine before training.
-run_id: minicpm_gr00t_dual_libero
+# action_horizon: number of actions predicted by the action head per call.
+# execution_horizon: number of predicted actions committed per call (when supported).
+# vlm_refresh_interval: control steps between upper VLM refreshes.
+# These are distinct; MiniCPM sees each environment frame for refresh scheduling,
+# while action inference follows execution_horizon policy-call boundaries.
+run_id: minicpm_dualasy_libero10_seed42_20260929_4gpu30k
 run_root_dir: playground/Checkpoints
 seed: 42
 wandb_entity: your_wandb_entity
-wandb_project: starVLA_MiniCPM_Dual
+wandb_project: starVLA_MiniCPM_DualAsy
 is_debug: false
 
 framework:
-  name: MiniCPMGR00TDual
+  name: MiniCPMGR00TDualAsy
   qwenvl:
     base_vlm: /data/tzq/datasets/starVLA/playground/Pretrained_models/MiniCPM-V-4.6
     attn_implementation: sdpa
-    enable_gradient_checkpointing: true
   dino:
     dino_backbone: dinov2_vits14
   action_model:
@@ -43,6 +44,19 @@ framework:
       num_layers: 16
       output_dim: 1024
       positional_embeddings: null
+  vlm_refresh_interval: 8
+  execution_horizon: 1
+  # Runtime wall-clock delay is measured; no universal fixed L is assumed.
+  # Offline wall-clock training needs a prior trace via --training-alignment-trace.
+  async_alignment:
+    # Calibrated offline training alignment from the LIBERO pilot. Runtime
+    # evaluation overrides this to wall_clock to exercise nonblocking refresh.
+    mode: fixed_step_delay
+    fixed_latency_steps: 4
+    trace_path: null
+    # Required for offline LeRobot anchors when mode=wall_clock. Set this to a
+    # prior rollout comparison.json; dataset sampling replays its exact source schedule.
+    training_trace_path: null
   reduce_in_full_precision: true
 
 datasets:
@@ -65,7 +79,6 @@ trainer:
   eval_interval: 1000000
   learning_rate:
     base: 2.5e-5
-    qwen_vl_interface: 1.0e-5
     action_model: 1.0e-4
   lr_scheduler_type: cosine_with_min_lr
   scheduler_specific_kwargs:

@@ -125,6 +125,12 @@ def main():
     parser.add_argument("--result", required=True)
     parser.add_argument("--max-control-steps", type=int, default=56)
     parser.add_argument(
+        "--init-state-index",
+        type=int,
+        default=0,
+        help="index into the selected task's canonical LIBERO initial states",
+    )
+    parser.add_argument(
         "--execution-horizon",
         type=int,
         default=PILOT_EXECUTION_HORIZON,
@@ -156,13 +162,18 @@ def main():
 
     task_id, task = _find_task(suite, args.task)
     init_states = suite.get_task_init_states(task_id)
+    if not 0 <= args.init_state_index < len(init_states):
+        raise IndexError(
+            f"init-state index {args.init_state_index} is outside [0, {len(init_states)}) "
+            f"for task {task.language!r}"
+        )
     bddl_path = pathlib.Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file
     env = OffScreenRenderEnv(
         bddl_file_name=str(bddl_path), camera_heights=256, camera_widths=256
     )
     env.seed(args.seed)
     env.reset()
-    obs = env.set_init_state(init_states[0])
+    obs = env.set_init_state(init_states[args.init_state_index])
 
     stats_doc = json.loads(pathlib.Path(args.stats).read_text())
     action_stats = stats_doc.get("statistics", stats_doc).get("action", {})
@@ -293,6 +304,7 @@ def main():
         "task_id": task_id,
         "task_language": task.language,
         "requested_instruction": args.task,
+        "init_state_index": args.init_state_index,
         "seed": args.seed,
         "success": bool(done),
         "control_steps": control_steps,

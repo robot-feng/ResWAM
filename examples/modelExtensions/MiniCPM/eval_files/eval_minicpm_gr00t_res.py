@@ -145,11 +145,17 @@ def main() -> None:
             expected_tasks = {str(entry["task"]) for entry in split_info["entries"]}
             if set(mean_baseline_metadata["task_array_keys"]) != expected_tasks:
                 raise ValueError("mean-residual task baselines do not cover exactly the evaluated split tasks")
-            if (
-                control_steps is not None
-                and int(mean_baseline_metadata["control_step"]) not in control_steps
-            ):
-                raise ValueError("mean-residual baseline control step is absent from evaluation control steps")
+            baseline_control_steps = mean_baseline_metadata.get("control_steps")
+            if baseline_control_steps is None:
+                baseline_control_steps = [mean_baseline_metadata["control_step"]]
+            if control_steps is not None and set(map(int, baseline_control_steps)) != set(control_steps):
+                raise ValueError(
+                    "mean-residual baseline control steps must exactly match evaluation control steps"
+                )
+            if control_steps is None and len(baseline_control_steps) != 1:
+                raise ValueError(
+                    "evaluation must specify control_steps for a multi-position mean baseline"
+                )
             mean_baselines = {
                 "global_mean_residual": torch.from_numpy(
                     baseline_artifact["global_mean_residual"].copy()

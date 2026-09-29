@@ -50,6 +50,12 @@ Training sample construction and runtime selection share the same
 source-to-activation schedule for controlled experiments:
 
 - `synchronous`: refresh and activate at the request step (`L=0`).
+- `synchronous` is still governed by `M`: with `M=8`, it performs a blocking
+  VLM refresh every eight control steps, not on every action call. `L=0` means
+  zero *control-step delivery delay* for that periodic refresh; it does not
+  remove VLM compute time or change the refresh cadence. The synchronous
+  `MiniCPMGR00TDual` baseline, which refreshes on every policy call, is a
+  separate comparison and must not be conflated with `DualAsy` at `M=8, L=0`.
 - `fixed_step_delay`: use an explicitly selected control-step delay. The
   schedule models a serialized worker queue when `L >= M`; the evaluator waits
   at a scheduled activation boundary if the real computation is not ready yet.

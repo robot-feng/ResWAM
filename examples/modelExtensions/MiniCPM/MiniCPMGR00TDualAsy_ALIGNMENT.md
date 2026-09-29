@@ -107,3 +107,55 @@ trace analysis.
   establish an asynchronous policy improvement.
 - The pilot currently fixes K at one. Making K configurable in the evaluator
   is separate from the alignment work and must not change H or M implicitly.
+
+## Same-trajectory 16-update comparison (2026-09-29)
+
+To extend the earlier two-update/24-control-step pipeline smoke, the three
+frameworks were trained sequentially on episode 0 and each was evaluated for
+the configured 56-control-step budget. This is still a one-task engineering
+pilot, not a policy performance study.
+
+Protocol:
+
+- Seed `1234`; task instruction `put the bowl on the plate`; 16 episode-0
+  training frames `[8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+  24]`; held-out action-loss frame `23`.
+- MiniCPM and DINO backbones were frozen. Each model received 16 action-loss
+  optimizer updates with the same selected current frames and action labels.
+- All runs used `H=8` actions predicted per call and `K=1` action executed per
+  control step. The DualAsy run additionally used `M=8` and controlled
+  `L=4`, in both training-anchor construction and runtime scheduling.
+- The evaluator still fixes `K=1`; it selects the first action from the
+  8-action chunk, executes it, then requests the next chunk. `H`, `K`, `M`, and
+  `L` are separately recorded; equal numeric values in another configuration
+  would not make these horizons interchangeable.
+
+| Variant | H / K / M / L | Action loss, update 1 → 16 | Held-out loss | Rollout | Mean / p95 policy RTT |
+|---|---:|---:|---|---|---:|
+| MiniCPMGR00T | 8 / 1 / — / — | 1.5605 → 1.1545 | 1.0278 | False at 56 steps | 0.748s / 0.911s |
+| MiniCPMGR00TDual | 8 / 1 / — / — | 1.5679 → 1.1925 | 1.0312 | False at 56 steps | 0.788s / 0.954s |
+| MiniCPMGR00TDualAsy | 8 / 1 / 8 / 4 | 1.5730 → 1.2117 | 1.0479 | False at 56 steps | 0.185s / 0.333s |
+
+The asynchronous run completed 56 action calls and seven VLM refreshes. Its
+training anchor schedule was:
+
+| Training control frames | VLM source anchor |
+|---|---:|
+| 8–11 | 0 |
+| 12–19 | 8 |
+| 20–22, 24 | 16 |
+
+Held-out frame 23 also used source frame 16. Runtime refresh events recorded
+sources `0, 8, 16, 24, 32, 40, 48` and scheduled activations `0, 12, 20, 28,
+36, 44, 52`. The per-control-step cached source trace advances at those same
+activation boundaries. This confirms the fixed-delay training anchors and
+runtime source selection agree for this pilot configuration.
+
+The fixed-delay evaluator may wait at a scheduled activation boundary, so its
+policy RTT is not a nonblocking wall-clock speed benchmark. All three rollouts
+reached the 56-step cutoff with `success=false`; 16 updates on one demonstration
+do not establish policy quality or an advantage for any framework. The useful
+result here is the checked H/K/M/L separation and the longer async source trace.
+
+Raw metrics, per-step trace, provenance, checkpoints, and videos are under
+`playground/Checkpoints/libero_minicpm_pilot/stage2_triplet_16updates_full56_seed1234/`.

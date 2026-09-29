@@ -1,9 +1,10 @@
 # Copyright 2026 starVLA community. All rights reserved.
 # Licensed under the MIT License.
-"""Read-only LeRobot adapter for successful-terminal MiniCPM residual samples.
+"""Read-only LeRobot adapter for successful-terminal MiniCPM goal samples.
 
 Terminal supervision is loaded only from an explicit JSONL manifest. A recorded
-last frame is never assumed to be a successful goal.
+last frame is never assumed to be a successful goal. Current-only mode decodes
+only the selected observation and the explicitly annotated terminal frame.
 """
 
 from __future__ import annotations
@@ -109,7 +110,7 @@ def _first_string(value: Any) -> str | None:
 
 
 class MiniCPMResidualLeRobotDataset(Dataset):
-    """Adapt one LeRobot dataset to all-history/explicit terminal supervision."""
+    """Adapt one LeRobot dataset to explicit terminal supervision."""
 
     def __init__(
         self,
@@ -122,6 +123,7 @@ class MiniCPMResidualLeRobotDataset(Dataset):
         video_backend: str = "torchvision_av",
         data_cfg: dict[str, Any] | None = None,
         max_history_frames: int | None = None,
+        history_mode: str = "full",
         sample_stride: int = 1,
         episode_ids: Sequence[str | int] | None = None,
         control_steps: Sequence[int] | None = None,
@@ -139,6 +141,9 @@ class MiniCPMResidualLeRobotDataset(Dataset):
                 f"{self.dataset.modality_keys.get('video', [])}"
             )
         self.camera_key = camera_key
+        if history_mode not in {"full", "current_only"}:
+            raise ValueError("history_mode must be 'full' or 'current_only'")
+        self.history_mode = history_mode
         self.success_terminals = load_success_terminals(success_terminal_manifest)
         self.assistant_labels = load_assistant_labels(assistant_label_manifest)
         self.max_history_frames = None if max_history_frames is None else int(max_history_frames)
@@ -150,6 +155,8 @@ class MiniCPMResidualLeRobotDataset(Dataset):
         all_steps = [tuple(item) for item in self.dataset.all_steps]
         self._episode_cache_id: str | None = None
         self._episode_cache: dict[str, Any] | None = None
+        self._current_only_cache_id: str | None = None
+        self._current_only_cache: dict[str, Any] | None = None
         known_episode_ids = {str(trajectory_id) for trajectory_id, _ in all_steps}
         unknown = set(self.success_terminals) - known_episode_ids
         if unknown:
@@ -241,32 +248,101 @@ class MiniCPMResidualLeRobotDataset(Dataset):
         }
         return self._episode_cache
 
+    def _load_current_only_step(self, trajectory_id: int, control_step: int) -> dict[str, Any]:
+        """Read only the selected current frame and its annotated terminal frame."""
+        episode_id = str(trajectory_id)
+        trajectory_index = self.dataset.get_trajectory_index(trajectory_id)
+        episode_length = int(self.dataset.trajectory_lengths[trajectory_index])
+        if episode_id not in self.success_terminals:
+            raise ValueError(
+                f"episode {episode_id} has no successful terminal annotation; "
+                "provide it in the success-terminal JSONL manifest"
+            )
+        terminal_step = self.success_terminals[episode_id]
+        if terminal_step >= episode_length:
+            raise ValueError(
+                f"terminal step {terminal_step} is outside episode {episode_id} length {episode_length}"
+            )
+
+        if self._current_only_cache_id != episode_id or self._current_only_cache is None:
+            terminal_raw = self._read_step(trajectory_id, terminal_step)
+            trajectory_data = self.dataset.curr_traj_data
+            if trajectory_data is None or "timestamp" not in trajectory_data:
+                raise ValueError(f"episode {episode_id} has no raw timestamp column")
+            instruction = None
+            for key in self.dataset.modality_keys.get("language", []):
+                instruction = _first_string(terminal_raw.get(key))
+                if instruction:
+                    break
+            if not instruction:
+                raise ValueError(f"episode {episode_id} has no task instruction in language modality")
+            self._current_only_cache_id = episode_id
+            self._current_only_cache = {
+                "terminal_image": _to_pil(terminal_raw[self.camera_key]),
+                "instruction": instruction,
+                "timestamps": trajectory_data["timestamp"].to_numpy(copy=True),
+                "terminal_step": terminal_step,
+            }
+
+        cache = self._current_only_cache
+        if control_step == terminal_step:
+            current_image = cache["terminal_image"]
+        else:
+            current_raw = self._read_step(trajectory_id, control_step)
+            current_image = _to_pil(current_raw[self.camera_key])
+        return {
+            "episode_id": episode_id,
+            "current_image": current_image,
+            "terminal_image": cache["terminal_image"],
+            "instruction": cache["instruction"],
+            "timestamps": cache["timestamps"],
+            "terminal_step": cache["terminal_step"],
+        }
+
     def __getitem__(self, index: int) -> dict[str, Any]:
         trajectory_id, control_step = self._steps[index]
-        episode = self._load_episode(trajectory_id)
-        history_start = 0
-        if self.max_history_frames is not None:
-            # This option is a deliberate context-window ablation and must be
-            # reported as such; the default remains every frame so far.
-            history_start = max(0, control_step + 1 - self.max_history_frames)
-        history = [
-            HistoryFrame(
-                image=episode["frames"][step],
+        if self.history_mode == "current_only":
+            episode = self._load_current_only_step(trajectory_id, int(control_step))
+            timestamp = float(episode["timestamps"][control_step])
+            current_frame = HistoryFrame(
+                image=episode["current_image"],
                 episode_id=episode["episode_id"],
-                control_step=step,
-                timestamp_seconds=episode["timestamps"][step],
+                control_step=int(control_step),
+                timestamp_seconds=timestamp,
                 view_id=self.camera_key,
-                frame_order=step,
+                frame_order=int(control_step),
             )
-            for step in range(history_start, control_step + 1)
-        ]
+            history = [current_frame]
+            current_image = episode["current_image"]
+            terminal_image = episode["terminal_image"]
+        else:
+            episode = self._load_episode(trajectory_id)
+            history_start = 0
+            if self.max_history_frames is not None:
+                # This option is a deliberate context-window ablation and must be
+                # reported as such; the default remains every frame so far.
+                history_start = max(0, control_step + 1 - self.max_history_frames)
+            history = [
+                HistoryFrame(
+                    image=episode["frames"][step],
+                    episode_id=episode["episode_id"],
+                    control_step=step,
+                    timestamp_seconds=episode["timestamps"][step],
+                    view_id=self.camera_key,
+                    frame_order=step,
+                )
+                for step in range(history_start, control_step + 1)
+            ]
+            timestamp = float(episode["timestamps"][control_step])
+            current_image = episode["frames"][control_step]
+            terminal_image = episode["frames"][episode["terminal_step"]]
         sample = {
             "episode_id": episode["episode_id"],
             "control_step": int(control_step),
-            "timestamp_seconds": float(episode["timestamps"][control_step]),
+            "timestamp_seconds": timestamp,
             "history": history,
-            "current_image": episode["frames"][control_step],
-            "terminal_image": episode["frames"][episode["terminal_step"]],
+            "current_image": current_image,
+            "terminal_image": terminal_image,
             "lang": episode["instruction"],
             "goal_target_valid": True,
             "terminal_step": int(episode["terminal_step"]),

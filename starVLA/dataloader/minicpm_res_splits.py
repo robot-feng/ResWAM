@@ -379,6 +379,8 @@ def load_residual_episode_split(
         "split": split,
         "manifest_path": str(manifest_path.resolve()),
         "manifest_sha256": manifest["manifest_sha256"],
+        "dataset_metadata_manifest_sha256": manifest["dataset"]["metadata_manifest_sha256"],
+        "success_terminal_manifest_sha256": manifest["success_terminal_source"]["sha256"],
         "episode_ids": [str(row["episode_id"]) for row in manifest["splits"][split]],
         "entries": manifest["splits"][split],
     }

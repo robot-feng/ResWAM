@@ -19,6 +19,7 @@ from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import _as_config
 from starVLA.model.framework.VLM4A.minicpm_gr00t_res_core import MiniCPMGR00TResCore
 from starVLA.model.framework.VLM4A.MiniCPMGR00TDualAsy import _asy_config
 from starVLA.model.framework.VLM4A.minicpm_video_history import HistoryFrame, gather_token_hidden_states
+from starVLA.model.framework.VLM4A.minicpm_res_metrics import goal_space_metrics
 from starVLA.model.modules.action_model.DINOResidualHead import DINOResidualHead
 
 
@@ -30,6 +31,21 @@ def test_residual_head_shapes_and_gradients():
     prediction.square().mean().backward()
     assert query.grad is not None and torch.isfinite(query.grad).all()
     assert all(parameter.grad is not None for parameter in head.parameters())
+
+
+def test_goal_space_metrics_score_absolute_and_residual_predictions_in_one_space():
+    current = torch.randn(1, 4, 3)
+    target_residual = torch.randn(1, 4, 3)
+    exact = goal_space_metrics(target_residual, target_residual, current)
+    assert exact["goal_mse"] == pytest.approx(0.0, abs=1e-12)
+    assert exact["goal_cosine_similarity"] == pytest.approx(1.0)
+    assert exact["goal_patch_cosine_similarity"] == pytest.approx(1.0)
+    assert exact["residual_cosine_similarity"] == pytest.approx(1.0)
+    assert exact["residual_norm_abs_error"] == pytest.approx(0.0)
+    assert exact["residual_norm_relative_error"] == pytest.approx(0.0)
+
+    zero = goal_space_metrics(torch.zeros_like(target_residual), target_residual, current)
+    assert zero["goal_mse"] == pytest.approx(target_residual.square().mean().item())
 
 
 def test_residual_target_alignment_zero_case_and_future_target_isolation():
@@ -356,6 +372,71 @@ def test_residual_dataset_episode_and_control_step_filters(tmp_path, monkeypatch
             sample_stride=8,
             episode_ids=["2"],
         )
+
+
+def test_current_only_dataset_reads_only_current_and_terminal_frames(tmp_path, monkeypatch):
+    manifest = tmp_path / "terminals.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "episode_id": "0",
+                "terminal_step": 7,
+                "is_success": True,
+                "task": "move block",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class _FakeDataset:
+        all_steps = [(0, 3)]
+        modality_keys = {"video": ["video.primary_image"], "language": ["language.task"]}
+        trajectory_ids = [0]
+        trajectory_lengths = [8]
+
+        def __init__(self):
+            self.curr_traj_data = None
+            self.curr_traj_id = None
+            self.read_steps = []
+
+        def get_trajectory_index(self, trajectory_id):
+            assert trajectory_id == 0
+            return 0
+
+        def get_step_data(self, trajectory_id, step):
+            import pandas as pd
+            import numpy as np
+
+            self.read_steps.append(step)
+            if self.curr_traj_data is None:
+                self.curr_traj_data = pd.DataFrame({"timestamp": [i / 10 for i in range(8)]})
+            return {
+                "video.primary_image": np.full((1, 8, 8, 3), step, dtype=np.uint8),
+                "language.task": ["move block"],
+            }
+
+    fake = _FakeDataset()
+    monkeypatch.setattr(residual_data, "make_LeRobotSingleDataset", lambda *args, **kwargs: fake)
+    dataset = residual_data.MiniCPMResidualLeRobotDataset(
+        data_root_dir=tmp_path,
+        dataset_name="fake",
+        robot_type="fake",
+        success_terminal_manifest=manifest,
+        camera_key="video.primary_image",
+        history_mode="current_only",
+        sample_stride=1,
+        control_steps=[3],
+    )
+    sample = dataset[0]
+
+    assert fake.read_steps == [7, 3]
+    assert len(sample["history"]) == 1
+    assert sample["history"][0].control_step == 3
+    assert sample["timestamp_seconds"] == pytest.approx(0.3)
+    assert sample["current_image"].getpixel((0, 0)) == (3, 3, 3)
+    assert sample["terminal_image"].getpixel((0, 0)) == (7, 7, 7)
+    assert sample["lang"] == "move block"
 
 
 def test_residual_split_manifest_pins_legacy_validation_and_blocks_group_leakage(tmp_path):

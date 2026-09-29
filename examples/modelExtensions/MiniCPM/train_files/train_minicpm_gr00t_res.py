@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -19,7 +21,11 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from starVLA.dataloader.minicpm_res_lerobot import MiniCPMResidualLeRobotDataset
-from starVLA.dataloader.minicpm_res_splits import SPLIT_NAMES, load_residual_episode_split
+from starVLA.dataloader.minicpm_res_splits import (
+    SPLIT_NAMES,
+    load_residual_episode_split,
+    sha256_file,
+)
 from starVLA.model.framework.VLM4A.MiniCPMGR00TRes import MiniCPMGR00TRes
 
 
@@ -48,6 +54,11 @@ def main() -> None:
     parser.add_argument("--split-manifest", type=Path, default=None)
     parser.add_argument("--split", choices=SPLIT_NAMES, default=None)
     parser.add_argument("--control-steps", default=None, help="optional comma-separated control-step indices")
+    parser.add_argument(
+        "--shuffle-samples",
+        action="store_true",
+        help="shuffle selected samples with a seeded sampler; useful when each episode contributes one step",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Build data/model and run one loss/gradient step")
     args = parser.parse_args()
 
@@ -101,16 +112,19 @@ def main() -> None:
         video_backend=dc.video_backend,
         data_cfg={"video_backend": dc.video_backend, "include_state": False},
         max_history_frames=dc.get("max_history_frames"),
+        history_mode=str(cfg.framework.residual_model.history_mode),
         sample_stride=int(cfg.framework.runtime.vlm_refresh_interval),
         episode_ids=episode_ids,
         control_steps=control_steps,
     )
+    sampler_generator = torch.Generator().manual_seed(seed)
     loader = DataLoader(
         dataset,
         batch_size=int(cfg.trainer.get("per_device_batch_size", 1)),
-        # Samples are ordered by episode so the adapter decodes each episode's
-        # frames once instead of repeatedly reloading them under random shuffles.
-        shuffle=False,
+        # Keep episode-local order by default; with one current-only sample per
+        # episode, opt-in shuffling does not duplicate history decoding.
+        shuffle=args.shuffle_samples,
+        generator=sampler_generator if args.shuffle_samples else None,
         num_workers=int(cfg.trainer.get("num_workers", 0)),
         collate_fn=_collate,
         drop_last=False,
@@ -132,6 +146,85 @@ def main() -> None:
     )
     output_dir = args.output_dir or Path(cfg.trainer.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    records_path = output_dir / "train_metrics.jsonl"
+    provenance_path = output_dir / "run_provenance.json"
+    if records_path.exists() or provenance_path.exists():
+        raise FileExistsError(
+            f"training output already contains a run: {output_dir}; choose a new output directory"
+        )
+    config_path = args.config.resolve()
+    resolved_config_path = output_dir / "resolved_config.yaml"
+    OmegaConf.save(cfg, resolved_config_path)
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[4], text=True
+        ).strip()
+        git_dirty = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                cwd=Path(__file__).resolve().parents[4],
+                text=True,
+            ).strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        git_commit = None
+        git_dirty = None
+    max_steps = int(args.max_steps or cfg.trainer.max_train_steps)
+    grad_accum = int(cfg.trainer.get("gradient_accumulation_steps", 1))
+    if grad_accum < 1:
+        raise ValueError("gradient_accumulation_steps must be >= 1")
+    log_every = int(cfg.trainer.get("log_every", 10))
+    save_every = int(args.save_every if args.save_every is not None else cfg.trainer.get("save_every", 100))
+    max_grad_norm = float(cfg.trainer.get("max_grad_norm", 1.0))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    provenance = {
+        "git_commit": git_commit,
+        "git_dirty_at_start": git_dirty,
+        "config_path": str(config_path),
+        "config_sha256": sha256_file(config_path),
+        "resolved_config_path": str(resolved_config_path.resolve()),
+        "resolved_config_sha256": sha256_file(resolved_config_path),
+        "seed": seed,
+        "framework": "MiniCPMGR00TRes",
+        "prediction_target": str(cfg.framework.residual_model.prediction_target),
+        "history_mode": str(cfg.framework.residual_model.history_mode),
+        "goal_target": str(cfg.framework.residual_model.goal_target),
+        "dino_teacher_sha256": model.dino_teacher_sha256,
+        "H_action_prediction": cfg.framework.get("action_model", {}).get("action_horizon"),
+        "K_execution": cfg.framework.runtime.get("execution_horizon"),
+        "M_vlm_refresh": int(cfg.framework.runtime.vlm_refresh_interval),
+        "L_alignment": None,
+        "alignment_mode": "synchronous_terminal_representation_training",
+        "split": split_info,
+        "success_terminal_manifest_path": str(Path(dc.success_terminal_manifest).resolve()),
+        "success_terminal_manifest_sha256": sha256_file(dc.success_terminal_manifest),
+        "dataset_path": str((Path(dc.data_root_dir) / dc.dataset_name).resolve()),
+        "dataset_metadata_manifest_sha256": (
+            None if split_info is None else split_info.get("dataset_metadata_manifest_sha256")
+        ),
+        "dataset_samples": len(dataset),
+        "selected_episode_ids": episode_ids,
+        "selected_control_steps": control_steps,
+        "sample_order": "seeded_random" if args.shuffle_samples else "dataset_order",
+        "batch_size": int(cfg.trainer.get("per_device_batch_size", 1)),
+        "gradient_accumulation_steps": grad_accum,
+        "max_optimizer_steps": max_steps,
+        "learning_rate": float(cfg.trainer.learning_rate),
+        "weight_decay": float(cfg.trainer.weight_decay),
+        "max_grad_norm": max_grad_norm,
+        "optimizer": "AdamW",
+        "trainable_parameter_count": sum(parameter.numel() for parameter in trainable),
+        "text_loss_weight": float(cfg.framework.residual_model.text_loss_weight),
+        "text_supervision_enabled": bool(dataset.assistant_labels),
+        "precision": "BF16 autocast for MiniCPM and DINO on CUDA; FP32 head and loss",
+        "device": str(device),
+        "device_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "torch_version": torch.__version__,
+        "python_version": sys.version,
+    }
+    provenance_path.write_text(
+        json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     if split_info is not None:
         split_provenance_path = output_dir / f"data_split_{split_info['split']}.json"
         split_provenance = {
@@ -147,17 +240,8 @@ def main() -> None:
             json.dumps(split_provenance, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-    max_steps = int(args.max_steps or cfg.trainer.max_train_steps)
-    grad_accum = int(cfg.trainer.get("gradient_accumulation_steps", 1))
-    if grad_accum < 1:
-        raise ValueError("gradient_accumulation_steps must be >= 1")
-    log_every = int(cfg.trainer.get("log_every", 10))
-    save_every = int(args.save_every if args.save_every is not None else cfg.trainer.get("save_every", 100))
-    max_grad_norm = float(cfg.trainer.get("max_grad_norm", 1.0))
-
     model.train()
     optimizer.zero_grad(set_to_none=True)
-    records_path = output_dir / "train_metrics.jsonl"
     started = time.perf_counter()
     update = 0
     micro_step = 0
@@ -188,6 +272,9 @@ def main() -> None:
                 if device.type == "cuda"
                 else None,
                 "elapsed_seconds": time.perf_counter() - started,
+                "sample_episode_ids": [str(example["episode_id"]) for example in batch],
+                "sample_control_steps": [int(example["control_step"]) for example in batch],
+                "sample_tasks": [str(example["lang"]) for example in batch],
             }
             with records_path.open("a", encoding="utf-8") as stream:
                 stream.write(json.dumps(row, ensure_ascii=False) + "\n")
